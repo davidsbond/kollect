@@ -1,0 +1,4 @@
+.github/
+.golangci.yaml
+docker-compose.yaml
+vendor/
