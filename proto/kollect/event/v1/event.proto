@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/davidsbond/kollect/proto/kollect/event/v1;event";
+
+// Package kollect.event.v1 contains the definition of the event envelope which wraps all events published by kollect
+// components.
+package kollect.event.v1;
+
+// Envelope is used as a wrapper around all published events that contains additional metadata, such as a unique
+// identifier, timestamps etc.
+message Envelope {
+  // id is a unique identifier for the event.
+  string id = 1;
+
+  // timestamp represents the time at which an event was created.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // applies_at indicates the time at which the event described in Payload happened. It does not always
+  // match Timestamp.
+  google.protobuf.Timestamp applies_at = 3;
+
+  // payload contains the content of the event,
+  google.protobuf.Any payload = 4;
+}

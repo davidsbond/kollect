@@ -1,0 +1,13 @@
+version: v1beta1
+name: buf.build/davidsbond/kollect
+build:
+  roots:
+    - proto
+breaking:
+  use:
+    - FILE
+  ignore:
+    - k8s.io
+lint:
+  use:
+    - DEFAULT

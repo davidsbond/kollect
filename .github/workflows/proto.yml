@@ -1,0 +1,75 @@
+name: Proto
+on:
+  push:
+    paths:
+      - 'proto/**'
+jobs:
+  # Job that runs buf lint on all .proto files. Fails if any linting errors occur.
+  lint:
+    runs-on: ubuntu-latest
+    container: "golang:1.17"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Set up cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Install tools
+        run: make go-install
+      - name: Lint
+        run: make proto-lint
+
+  # Job that runs buf generate on all .proto files. Fails if any changes have not been
+  # committed.
+  generate:
+    runs-on: ubuntu-latest
+    container: "golang:1.17"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Set up cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Install tools
+        run: make go-install
+      - name: Generate
+        run: make proto-generate
+      - name: Check for changes
+        run: make has-changes
+
+  # Job that runs buf breaking against the master branch. Fails if any breaking changes are
+  # within the changeset.
+  breaking:
+    runs-on: ubuntu-latest
+    container: "golang:1.17"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Set up cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Install tools
+        run: make go-install
+      - name: Check for breaking changes
+        env:
+          BUF_INPUT_HTTPS_USERNAME: ${{ github.repository_owner }}
+          BUF_INPUT_HTTPS_PASSWORD: ${{ github.token }}
+        run: make proto-breaking

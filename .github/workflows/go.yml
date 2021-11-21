@@ -1,0 +1,91 @@
+name: Go
+on:
+  push:
+    paths:
+      - '**.go'
+jobs:
+  # Job that runs gofumports on all go source files. Will fail if any formatting changes
+  # have not been committed.
+  format:
+    runs-on: ubuntu-latest
+    container: "golang:1.17"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Set up cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Install tools
+        run: make go-install
+      - name: Format
+        run: make go-format
+      - name: Check for changes
+        run: make has-changes
+
+  # Job that runs golangci-lint on all go source files. Will fail on any linting
+  # errors.
+  lint:
+    runs-on: ubuntu-latest
+    container: "golang:1.17"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Set up cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Install tools
+        run: make go-install
+      - name: Lint
+        run: make go-lint
+
+  # Job that ensures all dependencies are added to the go.mod and go.sum files
+  mod:
+    runs-on: ubuntu-latest
+    container: "golang:1.17"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Set up cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Tidy
+        run: make go-modules
+      - name: Check for changes
+        run: make has-changes
+
+  # Job that runs go tests.
+  test:
+    runs-on: ubuntu-latest
+    container: "golang:1.17"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Set up cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Run tests
+        run: make go-test

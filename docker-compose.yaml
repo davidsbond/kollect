@@ -1,0 +1,46 @@
+version: '3'
+services:
+  agent:
+    build:
+      context: .
+    command: /bin/kollect
+    environment:
+      # General configuration
+      EVENT_WRITER_URL: kafka://kollect
+      KAFKA_BROKERS: kafka:9092
+      KUBECONFIG: /var/.kube/config
+      WAIT_FOR_SYNC: "false"
+      CLUSTER_ID: docker-local
+
+      # Debugging configuration
+      TELEMETRY_URL: jaeger://jaeger:6831
+      ENABLE_DIAGNOSTICS: "true"
+    volumes:
+    - $HOME/.kube/config:/var/.kube/config
+    restart: on-failure
+    depends_on:
+    - jaeger
+    - kafka
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: "false"
+      BADGER_DIRECTORY_VALUE: /badger/data
+      BADGER_DIRECTORY_KEY: /badger/key
+    restart: on-failure
+    ports:
+    - "16686:16686"
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+
+  kafka:
+    image: wurstmeister/kafka
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_CREATE_TOPICS: kollect:10:1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    depends_on:
+      - zookeeper

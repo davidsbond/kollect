@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option go_package = "github.com/davidsbond/kollect/proto/kollect/resource/event/v1;resource";
+
+// Package kollect.resource.event.v1 defines event messages relating to the creation, modification and removal of
+// cluster resources.
+package kollect.resource.event.v1;
+
+// ResourceCreatedEvent describes the creation of a cluster resource.
+message ResourceCreatedEvent {
+  // uid is the unique identifier for a cluster resource.
+  string uid = 1;
+  // resource is the JSON-encoded representation of the cluster resource.
+  bytes resource = 2;
+  // cluster_id is the identifier of the cluster where the resource resides.
+  string cluster_id = 3;
+}
+
+// ResourceDeletedEvent describes the removal of a cluster resource.
+message ResourceDeletedEvent {
+  // uid is the unique identifier for a cluster resource.
+  string uid = 1;
+  // cluster_id is the identifier of the cluster where the resource resides.
+  string cluster_id = 2;
+}
+
+// ResourceUpdatedEvent describes the modification of a cluster resource.
+message ResourceUpdatedEvent {
+  // uid is the unique identifier for a cluster resource.
+  string uid = 1;
+  // then is the JSON-encoded representation of the previous state of the cluster resource.
+  bytes then = 2;
+  // now is the JSON-encoded representation of the new state of the cluster resource.
+  bytes now = 3;
+  // cluster_id is the identifier of the cluster where the resource resides.
+  string cluster_id = 4;
+}
