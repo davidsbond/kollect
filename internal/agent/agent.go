@@ -298,6 +298,7 @@ func (a *Agent) writeEvent(ctx context.Context, evt event.Event) {
 	}
 }
 
+// Ready returns true if the Agent's informer caches are synchronised.
 func (a *Agent) Ready() bool {
 	a.syncMux.RLock()
 	defer a.syncMux.RUnlock()
