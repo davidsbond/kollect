@@ -20,7 +20,7 @@ require (
 	google.golang.org/genproto v0.0.0-20211118181313-81c1377c94b1
 	google.golang.org/protobuf v1.27.1
 	k8s.io/api v0.22.4
-	k8s.io/apimachinery v0.22.4
+	k8s.io/apimachinery v0.23.1
 	k8s.io/client-go v0.22.4
 	k8s.io/klog/v2 v2.30.0
 	mvdan.cc/gofumpt v0.1.1
@@ -77,7 +77,7 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/esimonov/ifshort v1.0.3 // indirect
 	github.com/ettle/strcase v0.1.1 // indirect
-	github.com/evanphx/json-patch v4.11.0+incompatible // indirect
+	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
@@ -135,7 +135,7 @@ require (
 	github.com/jingyugao/rowserrcheck v1.1.1 // indirect
 	github.com/jirfag/go-printf-func-name v0.0.0-20200119135958-7558a9eaa5af // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/json-iterator/go v1.1.11 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/julz/importas v0.0.0-20210419104244-841f0c0fe66d // indirect
 	github.com/kisielk/errcheck v1.6.0 // indirect
 	github.com/kisielk/gotool v1.0.0 // indirect
@@ -159,7 +159,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/moricho/tparallel v0.2.1 // indirect
 	github.com/nakabonne/nestif v0.3.1 // indirect
 	github.com/nats-io/nats.go v1.12.0 // indirect
@@ -233,12 +233,13 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	honnef.co/go/tools v0.2.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20211109043538-20434351676c // indirect
-	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a // indirect
+	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
+	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b // indirect
 	mvdan.cc/interfacer v0.0.0-20180901003855-c20040233aed // indirect
 	mvdan.cc/lint v0.0.0-20170908181259-adc824a0674b // indirect
 	mvdan.cc/unparam v0.0.0-20210104141923-aac4ce9116a7 // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
+	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
