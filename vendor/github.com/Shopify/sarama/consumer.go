@@ -132,16 +132,17 @@ func (c *consumer) Partitions(topic string) ([]int32, error) {
 
 func (c *consumer) ConsumePartition(topic string, partition int32, offset int64) (PartitionConsumer, error) {
 	child := &partitionConsumer{
-		consumer:  c,
-		conf:      c.conf,
-		topic:     topic,
-		partition: partition,
-		messages:  make(chan *ConsumerMessage, c.conf.ChannelBufferSize),
-		errors:    make(chan *ConsumerError, c.conf.ChannelBufferSize),
-		feeder:    make(chan *FetchResponse, 1),
-		trigger:   make(chan none, 1),
-		dying:     make(chan none),
-		fetchSize: c.conf.Consumer.Fetch.Default,
+		consumer:             c,
+		conf:                 c.conf,
+		topic:                topic,
+		partition:            partition,
+		messages:             make(chan *ConsumerMessage, c.conf.ChannelBufferSize),
+		errors:               make(chan *ConsumerError, c.conf.ChannelBufferSize),
+		feeder:               make(chan *FetchResponse, 1),
+		preferredReadReplica: invalidPreferredReplicaID,
+		trigger:              make(chan none, 1),
+		dying:                make(chan none),
+		fetchSize:            c.conf.Consumer.Fetch.Default,
 	}
 
 	if err := child.chooseStartingOffset(offset); err != nil {
@@ -350,7 +351,6 @@ func (child *partitionConsumer) dispatcher() {
 				child.broker = nil
 			}
 
-			Logger.Printf("consumer/%s/%d finding new broker\n", child.topic, child.partition)
 			if err := child.dispatch(); err != nil {
 				child.sendError(err)
 				child.trigger <- none{}
@@ -371,6 +371,14 @@ func (child *partitionConsumer) preferredBroker() (*Broker, error) {
 		if err == nil {
 			return broker, nil
 		}
+		Logger.Printf(
+			"consumer/%s/%d failed to find active broker for preferred read replica %d - will fallback to leader",
+			child.topic, child.partition, child.preferredReadReplica)
+
+		// if we couldn't find it, discard the replica preference and trigger a
+		// metadata refresh whilst falling back to consuming from the leader again
+		child.preferredReadReplica = invalidPreferredReplicaID
+		_ = child.consumer.client.RefreshMetadata(child.topic)
 	}
 
 	// if preferred replica cannot be found fallback to leader
@@ -399,6 +407,9 @@ func (child *partitionConsumer) chooseStartingOffset(offset int64) error {
 	if err != nil {
 		return err
 	}
+
+	child.highWaterMarkOffset = newestOffset
+
 	oldestOffset, err := child.consumer.client.GetOffset(child.topic, child.partition, OffsetOldest)
 	if err != nil {
 		return err
@@ -605,7 +616,9 @@ func (child *partitionConsumer) parseResponse(response *FetchResponse) ([]*Consu
 
 	consumerBatchSizeMetric.Update(int64(nRecs))
 
-	child.preferredReadReplica = block.PreferredReadReplica
+	if block.PreferredReadReplica != invalidPreferredReplicaID {
+		child.preferredReadReplica = block.PreferredReadReplica
+	}
 
 	if nRecs == 0 {
 		partialTrailingMessage, err := block.isPartial()
@@ -629,6 +642,10 @@ func (child *partitionConsumer) parseResponse(response *FetchResponse) ([]*Consu
 					child.fetchSize = child.conf.Consumer.Fetch.Max
 				}
 			}
+		} else if block.LastRecordsBatchOffset != nil && *block.LastRecordsBatchOffset < block.HighWaterMarkOffset {
+			// check last record offset to avoid stuck if high watermark was not reached
+			Logger.Printf("consumer/broker/%d received batch with zero records but high watermark was not reached, topic %s, partition %d, offset %d\n", child.broker.broker.ID(), child.topic, child.partition, *block.LastRecordsBatchOffset)
+			child.offset = *block.LastRecordsBatchOffset + 1
 		}
 
 		return nil, nil
@@ -846,6 +863,9 @@ func (bc *brokerConsumer) handleResponses() {
 			if preferredBroker, err := child.preferredBroker(); err == nil {
 				if bc.broker.ID() != preferredBroker.ID() {
 					// not an error but needs redispatching to consume from preferred replica
+					Logger.Printf(
+						"consumer/broker/%d abandoned in favor of preferred replica broker/%d\n",
+						bc.broker.ID(), preferredBroker.ID())
 					child.trigger <- none{}
 					delete(bc.subscriptions, child)
 				}
@@ -854,7 +874,7 @@ func (bc *brokerConsumer) handleResponses() {
 		}
 
 		// Discard any replica preference.
-		child.preferredReadReplica = -1
+		child.preferredReadReplica = invalidPreferredReplicaID
 
 		switch result {
 		case errTimedOut:
