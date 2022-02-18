@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,4 +41,83 @@ func (s *recommendationService) RecommendedRepositories(ctx context.Context) (re
 		return nil, err
 	}
 	return response.Repositories, nil
+}
+
+// RecommendedTemplates returns a list of recommended templates.
+func (s *recommendationService) RecommendedTemplates(ctx context.Context) (templates []*v1alpha1.RecommendedTemplate, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.RecommendedTemplates(
+		ctx,
+		&v1alpha1.RecommendedTemplatesRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return response.Templates, nil
+}
+
+// ListRecommendedRepositories returns a list of recommended repositories that user have access to.
+func (s *recommendationService) ListRecommendedRepositories(ctx context.Context) (repositories []*v1alpha1.RecommendedRepository, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.ListRecommendedRepositories(
+		ctx,
+		&v1alpha1.ListRecommendedRepositoriesRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return response.Repositories, nil
+}
+
+// ListRecommendedTemplates returns a list of recommended templates that user have access to.
+func (s *recommendationService) ListRecommendedTemplates(ctx context.Context) (templates []*v1alpha1.RecommendedTemplate, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.ListRecommendedTemplates(
+		ctx,
+		&v1alpha1.ListRecommendedTemplatesRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return response.Templates, nil
+}
+
+// SetRecommendedRepositories set the list of repository recommendations in the server.
+func (s *recommendationService) SetRecommendedRepositories(ctx context.Context, repositories []*v1alpha1.SetRecommendedRepository) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.SetRecommendedRepositories(
+		ctx,
+		&v1alpha1.SetRecommendedRepositoriesRequest{
+			Repositories: repositories,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetRecommendedTemplates set the list of template recommendations in the server.
+func (s *recommendationService) SetRecommendedTemplates(ctx context.Context, templates []*v1alpha1.SetRecommendedTemplate) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.SetRecommendedTemplates(
+		ctx,
+		&v1alpha1.SetRecommendedTemplatesRequest{
+			Templates: templates,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }

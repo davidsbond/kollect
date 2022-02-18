@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ func (s *generateService) GeneratePlugins(
 	ctx context.Context,
 	image *v1.Image,
 	plugins []*v1alpha1.PluginReference,
+	includeImports bool,
+	includeWellKnownTypes bool,
 ) (responses []*pluginpb.CodeGeneratorResponse, runtimeLibraries []*v1alpha1.RuntimeLibrary, _ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
@@ -44,8 +46,10 @@ func (s *generateService) GeneratePlugins(
 	response, err := s.client.GeneratePlugins(
 		ctx,
 		&v1alpha1.GeneratePluginsRequest{
-			Image:   image,
-			Plugins: plugins,
+			Image:                 image,
+			Plugins:               plugins,
+			IncludeImports:        includeImports,
+			IncludeWellKnownTypes: includeWellKnownTypes,
 		},
 	)
 	if err != nil {
@@ -62,6 +66,8 @@ func (s *generateService) GenerateTemplate(
 	templateOwner string,
 	templateName string,
 	templateVersion string,
+	includeImports bool,
+	includeWellKnownTypes bool,
 ) (files []*v1alpha1.File, runtimeLibraries []*v1alpha1.RuntimeLibrary, _ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
@@ -69,10 +75,12 @@ func (s *generateService) GenerateTemplate(
 	response, err := s.client.GenerateTemplate(
 		ctx,
 		&v1alpha1.GenerateTemplateRequest{
-			Image:           image,
-			TemplateOwner:   templateOwner,
-			TemplateName:    templateName,
-			TemplateVersion: templateVersion,
+			Image:                 image,
+			TemplateOwner:         templateOwner,
+			TemplateName:          templateName,
+			TemplateVersion:       templateVersion,
+			IncludeImports:        includeImports,
+			IncludeWellKnownTypes: includeWellKnownTypes,
 		},
 	)
 	if err != nil {

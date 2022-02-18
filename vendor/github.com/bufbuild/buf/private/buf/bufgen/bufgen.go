@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@ package bufgen
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
 	"github.com/bufbuild/buf/private/bufpkg/bufimage"
-	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/gen/proto/apiclient/buf/alpha/registry/v1alpha1/registryv1alpha1apiclient"
 	"github.com/bufbuild/buf/private/pkg/app"
+	"github.com/bufbuild/buf/private/pkg/command"
 	"github.com/bufbuild/buf/private/pkg/storage"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
 	"go.uber.org/zap"
@@ -111,9 +113,15 @@ type Generator interface {
 func NewGenerator(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 	registryProvider registryv1alpha1apiclient.Provider,
 ) Generator {
-	return newGenerator(logger, storageosProvider, registryProvider)
+	return newGenerator(
+		logger,
+		storageosProvider,
+		runner,
+		registryProvider,
+	)
 }
 
 // GenerateOption is an option for Generate.
@@ -131,10 +139,20 @@ func GenerateWithBaseOutDirPath(baseOutDirPath string) GenerateOption {
 
 // GenerateWithIncludeImports says to also generate imports.
 //
-// Note that this does NOT result in the Well-Known Types being generated.
+// Note that this does NOT result in the Well-Known Types being generated, use
+// GenerateWithIncludeWellKnownTypes to include the Well-Known Types.
 func GenerateWithIncludeImports() GenerateOption {
 	return func(generateOptions *generateOptions) {
 		generateOptions.includeImports = true
+	}
+}
+
+// GenerateWithIncludeWellKnownTypes says to also generate well known types.
+//
+// This option has no effect if GenerateWithIncludeImports is not set.
+func GenerateWithIncludeWellKnownTypes() GenerateOption {
+	return func(generateOptions *generateOptions) {
+		generateOptions.includeWellKnownTypes = true
 	}
 }
 
@@ -161,23 +179,46 @@ type PluginConfig struct {
 	Strategy Strategy
 }
 
-// ManagedConfig is the Managed Mode configuration.
+// PluginName returns this PluginConfig's plugin name.
+// Only one of Name or Remote will be set.
+func (p *PluginConfig) PluginName() string {
+	if p == nil {
+		return ""
+	}
+	if p.Name != "" {
+		return p.Name
+	}
+	if p.Remote != "" {
+		return p.Remote
+	}
+	return ""
+}
+
+// ManagedConfig is the managed mode configuration.
 type ManagedConfig struct {
 	CcEnableArenas        *bool
 	JavaMultipleFiles     *bool
 	JavaStringCheckUtf8   *bool
-	JavaPackagePrefix     string
+	JavaPackagePrefix     *JavaPackagePrefixConfig
 	OptimizeFor           *descriptorpb.FileOptions_OptimizeMode
 	GoPackagePrefixConfig *GoPackagePrefixConfig
 	Override              map[string]map[string]string
 }
 
+// JavaPackagePrefixConfig is the java_package prefix configuration.
+type JavaPackagePrefixConfig struct {
+	Default string
+	Except  []bufmoduleref.ModuleIdentity
+	// bufmoduleref.ModuleIdentity -> java_package prefix.
+	Override map[bufmoduleref.ModuleIdentity]string
+}
+
 // GoPackagePrefixConfig is the go_package prefix configuration.
 type GoPackagePrefixConfig struct {
 	Default string
-	Except  []bufmodule.ModuleIdentity
-	// bufmodule.ModuleIdentity -> go_package prefix.
-	Override map[bufmodule.ModuleIdentity]string
+	Except  []bufmoduleref.ModuleIdentity
+	// bufmoduleref.ModuleIdentity -> go_package prefix.
+	Override map[bufmoduleref.ModuleIdentity]string
 }
 
 // ReadConfig reads the configuration from the OS or an override, if any.
@@ -235,18 +276,18 @@ type ExternalPluginConfigV1 struct {
 	Strategy string      `json:"strategy,omitempty" yaml:"strategy,omitempty"`
 }
 
-// ExternalManagedConfigV1 is an external Managed Mode configuration.
+// ExternalManagedConfigV1 is an external managed mode configuration.
 //
 // Only use outside of this package for testing.
 type ExternalManagedConfigV1 struct {
-	Enabled             bool                            `json:"enabled,omitempty" yaml:"enabled,omitempty"`
-	CcEnableArenas      *bool                           `json:"cc_enable_arenas,omitempty" yaml:"cc_enable_arenas,omitempty"`
-	JavaMultipleFiles   *bool                           `json:"java_multiple_files,omitempty" yaml:"java_multiple_files,omitempty"`
-	JavaStringCheckUtf8 *bool                           `json:"java_string_check_utf8,omitempty" yaml:"java_string_check_utf8,omitempty"`
-	JavaPackagePrefix   string                          `json:"java_package_prefix,omitempty" yaml:"java_package_prefix,omitempty"`
-	OptimizeFor         string                          `json:"optimize_for,omitempty" yaml:"optimize_for,omitempty"`
-	GoPackagePrefix     ExternalGoPackagePrefixConfigV1 `json:"go_package_prefix,omitempty" yaml:"go_package_prefix,omitempty"`
-	Override            map[string]map[string]string    `json:"override,omitempty" yaml:"override,omitempty"`
+	Enabled             bool                              `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	CcEnableArenas      *bool                             `json:"cc_enable_arenas,omitempty" yaml:"cc_enable_arenas,omitempty"`
+	JavaMultipleFiles   *bool                             `json:"java_multiple_files,omitempty" yaml:"java_multiple_files,omitempty"`
+	JavaStringCheckUtf8 *bool                             `json:"java_string_check_utf8,omitempty" yaml:"java_string_check_utf8,omitempty"`
+	JavaPackagePrefix   ExternalJavaPackagePrefixConfigV1 `json:"java_package_prefix,omitempty" yaml:"java_package_prefix,omitempty"`
+	OptimizeFor         string                            `json:"optimize_for,omitempty" yaml:"optimize_for,omitempty"`
+	GoPackagePrefix     ExternalGoPackagePrefixConfigV1   `json:"go_package_prefix,omitempty" yaml:"go_package_prefix,omitempty"`
+	Override            map[string]map[string]string      `json:"override,omitempty" yaml:"override,omitempty"`
 }
 
 // IsEmpty returns true if the config is empty, excluding the 'Enabled' setting.
@@ -254,10 +295,56 @@ func (e ExternalManagedConfigV1) IsEmpty() bool {
 	return e.CcEnableArenas == nil &&
 		e.JavaMultipleFiles == nil &&
 		e.JavaStringCheckUtf8 == nil &&
-		e.JavaPackagePrefix == "" &&
+		e.JavaPackagePrefix.IsEmpty() &&
 		e.OptimizeFor == "" &&
 		e.GoPackagePrefix.IsEmpty() &&
 		len(e.Override) == 0
+}
+
+// ExternalJavaPackagePrefixConfigV1 is the external java_package prefix configuration.
+type ExternalJavaPackagePrefixConfigV1 struct {
+	Default  string            `json:"default,omitempty" yaml:"default,omitempty"`
+	Except   []string          `json:"except,omitempty" yaml:"except,omitempty"`
+	Override map[string]string `json:"override,omitempty" yaml:"override,omitempty"`
+}
+
+// IsEmpty returns true if the config is empty.
+func (e ExternalJavaPackagePrefixConfigV1) IsEmpty() bool {
+	return e.Default == "" &&
+		len(e.Except) == 0 &&
+		len(e.Override) == 0
+}
+
+// UnmarshalYAML satisfies the yaml.Unmarshaler interface. This is done to maintain backward compatibility
+// of accepting a plain string value for java_package_prefix.
+func (e *ExternalJavaPackagePrefixConfigV1) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	return e.unmarshalWith(unmarshal)
+}
+
+// UnmarshalJSON satisfies the json.Unmarshaler interface. This is done to maintain backward compatibility
+// of accepting a plain string value for java_package_prefix.
+func (e *ExternalJavaPackagePrefixConfigV1) UnmarshalJSON(data []byte) error {
+	unmarshal := func(v interface{}) error {
+		return json.Unmarshal(data, v)
+	}
+
+	return e.unmarshalWith(unmarshal)
+}
+
+// unmarshalWith is used to unmarshal into json/yaml. See https://abhinavg.net/posts/flexible-yaml for details.
+func (e *ExternalJavaPackagePrefixConfigV1) unmarshalWith(unmarshal func(interface{}) error) error {
+	var prefix string
+	if err := unmarshal(&prefix); err == nil {
+		e.Default = prefix
+		return nil
+	}
+
+	type rawExternalJavaPackagePrefixConfigV1 ExternalJavaPackagePrefixConfigV1
+	if err := unmarshal((*rawExternalJavaPackagePrefixConfigV1)(e)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ExternalGoPackagePrefixConfigV1 is the external go_package prefix configuration.

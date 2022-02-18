@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,69 +35,27 @@ type UserService interface {
 		pageSize uint32,
 		pageToken string,
 		reverse bool,
+		userStateFilter v1alpha1.UserState,
 	) (users []*v1alpha1.User, nextPageToken string, err error)
 	// ListOrganizationUsers lists all users for an organization.
+	// TODO: #663 move this to organization service
 	ListOrganizationUsers(
 		ctx context.Context,
 		organizationId string,
 		pageSize uint32,
 		pageToken string,
 		reverse bool,
-	) (users []*v1alpha1.User, nextPageToken string, err error)
-	// UpdateUserUsername updates a user's username.
-	UpdateUserUsername(ctx context.Context, newUsername string) (user *v1alpha1.User, err error)
+	) (users []*v1alpha1.OrganizationUser, nextPageToken string, err error)
 	// DeleteUser deletes a user.
 	DeleteUser(ctx context.Context) (err error)
-	// AddUserOrganizationScope adds an organization scope for a specific organization to a user by ID.
-	AddUserOrganizationScope(
+	// Deactivate user deactivates a user.
+	DeactivateUser(ctx context.Context, id string) (err error)
+	// UpdateUserServerRole update the role of an user in the server.
+	UpdateUserServerRole(
 		ctx context.Context,
-		id string,
-		organizationId string,
-		organizationScope v1alpha1.OrganizationScope,
+		userId string,
+		serverRole v1alpha1.ServerRole,
 	) (err error)
-	// AddUserOrganizationScopeByName adds an organization scope for a specific organization to a user by name.
-	AddUserOrganizationScopeByName(
-		ctx context.Context,
-		name string,
-		organizationName string,
-		organizationScope v1alpha1.OrganizationScope,
-	) (err error)
-	// RemoveUserOrganizationScope removes an organization scope for a specific organization from a user by ID.
-	RemoveUserOrganizationScope(
-		ctx context.Context,
-		id string,
-		organizationId string,
-		organizationScope v1alpha1.OrganizationScope,
-	) (err error)
-	// RemoveUserOrganizationScopeByName removes an organization scope for a specific organization from a user by name.
-	RemoveUserOrganizationScopeByName(
-		ctx context.Context,
-		name string,
-		organizationName string,
-		organizationScope v1alpha1.OrganizationScope,
-	) (err error)
-	// AddUserServerScope adds a server scope for a user by ID.
-	AddUserServerScope(
-		ctx context.Context,
-		id string,
-		serverScope v1alpha1.ServerScope,
-	) (err error)
-	// AddUserServerScopeByName adds a server scope for a user by name.
-	AddUserServerScopeByName(
-		ctx context.Context,
-		name string,
-		serverScope v1alpha1.ServerScope,
-	) (err error)
-	// RemoveUserServerScope removes a server scope for a user by ID.
-	RemoveUserServerScope(
-		ctx context.Context,
-		id string,
-		serverScope v1alpha1.ServerScope,
-	) (err error)
-	// RemoveUserServerScopeByName removes a server scope for a user by name.
-	RemoveUserServerScopeByName(
-		ctx context.Context,
-		name string,
-		serverScope v1alpha1.ServerScope,
-	) (err error)
+	// CountUsers returns the number of users in the server by the user state provided.
+	CountUsers(ctx context.Context, userStateFilter v1alpha1.UserState) (totalCount uint32, err error)
 }

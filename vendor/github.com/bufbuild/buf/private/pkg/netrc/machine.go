@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,20 +18,17 @@ type machine struct {
 	name     string
 	login    string
 	password string
-	account  string
 }
 
 func newMachine(
 	name string,
 	login string,
 	password string,
-	account string,
 ) *machine {
 	return &machine{
 		name:     name,
 		login:    login,
 		password: password,
-		account:  account,
 	}
 }
 
@@ -45,8 +42,4 @@ func (m *machine) Login() string {
 
 func (m *machine) Password() string {
 	return m.password
-}
-
-func (m *machine) Account() string {
-	return m.account
 }

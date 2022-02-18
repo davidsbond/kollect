@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,19 +17,20 @@ package bufmodule
 import (
 	"context"
 
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/storage"
 )
 
 type singleModuleReadBucket struct {
 	storage.ReadBucket
 
-	moduleIdentity ModuleIdentity
+	moduleIdentity bufmoduleref.ModuleIdentity
 	commit         string
 }
 
 func newSingleModuleReadBucket(
 	sourceReadBucket storage.ReadBucket,
-	moduleIdentity ModuleIdentity,
+	moduleIdentity bufmoduleref.ModuleIdentity,
 	commit string,
 ) *singleModuleReadBucket {
 	return &singleModuleReadBucket{

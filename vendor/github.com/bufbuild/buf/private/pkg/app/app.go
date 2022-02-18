@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ type EnvContainer interface {
 	//
 	// Returns empty string if the key is not set or the value is empty.
 	Env(key string) string
-
 	// ForEachEnv iterates over all non-empty environment variables and calls the function.
 	//
 	// The value will never be empty.

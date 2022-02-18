@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/normalpath"
 	"github.com/bufbuild/buf/private/pkg/stringutil"
 )
@@ -27,20 +28,35 @@ func applyModulePaths(
 	module bufmodule.Module,
 	roots []string,
 	fileOrDirPaths *[]string,
+	excludeFileOrDirPaths []string,
 	fileOrDirPathsAllowNotExist bool,
 	pathType normalpath.PathType,
 ) (bufmodule.Module, error) {
-	if fileOrDirPaths == nil {
+	if fileOrDirPaths == nil && excludeFileOrDirPaths == nil {
 		return module, nil
+	}
+	var excludePaths []string
+	if len(excludeFileOrDirPaths) != 0 {
+		var err error
+		excludePaths, err = pathsToTargetPaths(roots, excludeFileOrDirPaths, pathType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if fileOrDirPaths == nil {
+		if fileOrDirPathsAllowNotExist {
+			return bufmodule.ModuleWithExcludePathsAllowNotExist(module, excludePaths)
+		}
+		return bufmodule.ModuleWithExcludePaths(module, excludePaths)
 	}
 	targetPaths, err := pathsToTargetPaths(roots, *fileOrDirPaths, pathType)
 	if err != nil {
 		return nil, err
 	}
 	if fileOrDirPathsAllowNotExist {
-		return bufmodule.ModuleWithTargetPathsAllowNotExist(module, targetPaths)
+		return bufmodule.ModuleWithTargetPathsAllowNotExist(module, targetPaths, excludePaths)
 	}
-	return bufmodule.ModuleWithTargetPaths(module, targetPaths)
+	return bufmodule.ModuleWithTargetPaths(module, targetPaths, excludePaths)
 }
 
 func pathsToTargetPaths(roots []string, paths []string, pathType normalpath.PathType) ([]string, error) {
@@ -90,11 +106,14 @@ func pathToTargetPath(roots []string, path string, pathType normalpath.PathType)
 }
 
 type buildOptions struct {
-	moduleIdentity bufmodule.ModuleIdentity
+	moduleIdentity bufmoduleref.ModuleIdentity
 	// If nil, all files are considered targets.
 	// If empty (but non-nil), the module will have no target paths.
 	paths              *[]string
 	pathsAllowNotExist bool
+	// Paths that will be excluded from the module build process. This is handled in conjunction
+	// with `paths`.
+	excludePaths []string
 }
 
 type buildModuleFileSetOptions struct {

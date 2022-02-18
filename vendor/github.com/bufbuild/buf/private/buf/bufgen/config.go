@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/bufpkg/bufplugin"
 	"github.com/bufbuild/buf/private/pkg/encoding"
 	"github.com/bufbuild/buf/private/pkg/normalpath"
@@ -195,10 +195,14 @@ func validateExternalConfigV1(externalConfig ExternalConfigV1, id string) error 
 
 func newManagedConfigV1(externalManagedConfig ExternalManagedConfigV1) (*ManagedConfig, error) {
 	if !externalManagedConfig.Enabled && !externalManagedConfig.IsEmpty() {
-		return nil, errors.New("Managed Mode options are set, but 'managed.enabled: true' is not set")
+		return nil, errors.New("managed mode options are set but 'managed.enabled: true' is not set")
 	}
 	if !externalManagedConfig.Enabled {
 		return nil, nil
+	}
+	javaPackagePrefixConfig, err := newJavaPackagePrefixConfigV1(externalManagedConfig.JavaPackagePrefix)
+	if err != nil {
+		return nil, err
 	}
 	var optimizeFor *descriptorpb.FileOptions_OptimizeMode
 	if externalManagedConfig.OptimizeFor != "" {
@@ -239,10 +243,49 @@ func newManagedConfigV1(externalManagedConfig ExternalManagedConfigV1) (*Managed
 		CcEnableArenas:        externalManagedConfig.CcEnableArenas,
 		JavaMultipleFiles:     externalManagedConfig.JavaMultipleFiles,
 		JavaStringCheckUtf8:   externalManagedConfig.JavaStringCheckUtf8,
-		JavaPackagePrefix:     externalManagedConfig.JavaPackagePrefix,
+		JavaPackagePrefix:     javaPackagePrefixConfig,
 		OptimizeFor:           optimizeFor,
 		GoPackagePrefixConfig: goPackagePrefixConfig,
 		Override:              override,
+	}, nil
+}
+
+func newJavaPackagePrefixConfigV1(externalJavaPackagePrefixConfig ExternalJavaPackagePrefixConfigV1) (*JavaPackagePrefixConfig, error) {
+	if externalJavaPackagePrefixConfig.IsEmpty() {
+		return nil, nil
+	}
+	if externalJavaPackagePrefixConfig.Default == "" {
+		return nil, errors.New("java_package_prefix setting requires a default value")
+	}
+	seenModuleIdentities := make(map[string]struct{}, len(externalJavaPackagePrefixConfig.Except))
+	except := make([]bufmoduleref.ModuleIdentity, 0, len(externalJavaPackagePrefixConfig.Except))
+	for _, moduleName := range externalJavaPackagePrefixConfig.Except {
+		moduleIdentity, err := bufmoduleref.ModuleIdentityForString(moduleName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid java_package_prefix except: %w", err)
+		}
+		if _, ok := seenModuleIdentities[moduleIdentity.IdentityString()]; ok {
+			return nil, fmt.Errorf("invalid java_package_prefix except: %q is defined multiple times", moduleIdentity.IdentityString())
+		}
+		seenModuleIdentities[moduleIdentity.IdentityString()] = struct{}{}
+		except = append(except, moduleIdentity)
+	}
+	override := make(map[bufmoduleref.ModuleIdentity]string, len(externalJavaPackagePrefixConfig.Override))
+	for moduleName, javaPackagePrefix := range externalJavaPackagePrefixConfig.Override {
+		moduleIdentity, err := bufmoduleref.ModuleIdentityForString(moduleName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid java_package_prefix override key: %w", err)
+		}
+		if _, ok := seenModuleIdentities[moduleIdentity.IdentityString()]; ok {
+			return nil, fmt.Errorf("invalid java_package_prefix override: %q is already defined as an except", moduleIdentity.IdentityString())
+		}
+		seenModuleIdentities[moduleIdentity.IdentityString()] = struct{}{}
+		override[moduleIdentity] = javaPackagePrefix
+	}
+	return &JavaPackagePrefixConfig{
+		Default:  externalJavaPackagePrefixConfig.Default,
+		Except:   except,
+		Override: override,
 	}, nil
 }
 
@@ -258,9 +301,9 @@ func newGoPackagePrefixConfigV1(externalGoPackagePrefixConfig ExternalGoPackageP
 		return nil, fmt.Errorf("invalid go_package_prefix default: %w", err)
 	}
 	seenModuleIdentities := make(map[string]struct{}, len(externalGoPackagePrefixConfig.Except))
-	except := make([]bufmodule.ModuleIdentity, 0, len(externalGoPackagePrefixConfig.Except))
+	except := make([]bufmoduleref.ModuleIdentity, 0, len(externalGoPackagePrefixConfig.Except))
 	for _, moduleName := range externalGoPackagePrefixConfig.Except {
-		moduleIdentity, err := bufmodule.ModuleIdentityForString(moduleName)
+		moduleIdentity, err := bufmoduleref.ModuleIdentityForString(moduleName)
 		if err != nil {
 			return nil, fmt.Errorf("invalid go_package_prefix except: %w", err)
 		}
@@ -270,9 +313,9 @@ func newGoPackagePrefixConfigV1(externalGoPackagePrefixConfig ExternalGoPackageP
 		seenModuleIdentities[moduleIdentity.IdentityString()] = struct{}{}
 		except = append(except, moduleIdentity)
 	}
-	override := make(map[bufmodule.ModuleIdentity]string, len(externalGoPackagePrefixConfig.Override))
+	override := make(map[bufmoduleref.ModuleIdentity]string, len(externalGoPackagePrefixConfig.Override))
 	for moduleName, goPackagePrefix := range externalGoPackagePrefixConfig.Override {
-		moduleIdentity, err := bufmodule.ModuleIdentityForString(moduleName)
+		moduleIdentity, err := bufmoduleref.ModuleIdentityForString(moduleName)
 		if err != nil {
 			return nil, fmt.Errorf("invalid go_package_prefix override key: %w", err)
 		}

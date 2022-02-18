@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,12 +99,6 @@ func (e *Error) Unwrap() error {
 		return nil
 	}
 	return e.Err
-}
-
-// Is implements errors.Is for Error.
-func (e *Error) Is(err error) bool {
-	_, ok := err.(*Error)
-	return ok
 }
 
 // Normalize normalizes the given path.

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,6 +111,7 @@ func (b *moduleIncludeBuilder) buildForIncludes(
 		module,
 		absIncludeDirPaths,
 		absFileOrDirPaths,
+		nil, // Excluding files isn't supported for the ModuleIncludeBuilder.
 		fileOrDirPathsAllowNotExist,
 		normalpath.Absolute,
 	)

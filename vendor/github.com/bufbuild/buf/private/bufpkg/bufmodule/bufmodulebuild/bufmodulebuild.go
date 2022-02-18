@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/storage"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
 	"go.uber.org/zap"
@@ -85,7 +86,7 @@ type ModuleIncludeBuilder interface {
 // NewModuleIncludeBuilder returns a new ModuleIncludeBuilder.
 //
 // TODO: we should parse includeDirPaths for modules as well in theory
-// would be nice to be able to do buf protoc -I path/to/dir -I buf.build/foo/bar/v1
+// would be nice to be able to do buf alpha protoc -I path/to/dir -I buf.build/foo/bar/v1
 func NewModuleIncludeBuilder(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
@@ -119,7 +120,7 @@ func WithPaths(paths []string) BuildOption {
 // These paths will be normalized.
 // Multiple calls to this option and WithPaths will override previous calls.
 //
-// This results in ModuleWithTargetPathsAllowNotExist being used on the resulting build module.
+// This results in ModuleWithPathsAllowNotExist being used on the resulting build module.
 // This is done within bufmodulebuild so we can resolve the paths relative to their roots.
 func WithPathsAllowNotExist(paths []string) BuildOption {
 	return func(buildOptions *buildOptions) {
@@ -134,8 +135,24 @@ func WithPathsAllowNotExist(paths []string) BuildOption {
 // TODO: we also have ModuleWithModuleIdentityAndCommit in bufmodule
 // We need to disambiguate module building between bufmodule and bufmodulebuild
 // bufimage and bufimagebuild work, but bufmodule and bufmodulebuild are a mess
-func WithModuleIdentity(moduleIdentity bufmodule.ModuleIdentity) BuildOption {
+func WithModuleIdentity(moduleIdentity bufmoduleref.ModuleIdentity) BuildOption {
 	return func(buildOptions *buildOptions) {
 		buildOptions.moduleIdentity = moduleIdentity
+	}
+}
+
+// WithExcludePaths returns a new BuildOption that specifies files to be excluded from the build.
+func WithExcludePaths(excludePaths []string) BuildOption {
+	return func(buildOptions *buildOptions) {
+		buildOptions.excludePaths = excludePaths
+	}
+}
+
+// WithExcludePathsAllowNotExist returns a new BuildOption that specifies files to be excluded from the build,
+// but allows the specified paths to not exist.
+func WithExcludePathsAllowNotExist(excludePaths []string) BuildOption {
+	return func(buildOptions *buildOptions) {
+		buildOptions.excludePaths = excludePaths
+		buildOptions.pathsAllowNotExist = true
 	}
 }

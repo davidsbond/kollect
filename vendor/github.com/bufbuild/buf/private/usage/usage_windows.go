@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,4 @@
 
 package usage
 
-const (
-	testSuffix = ".test.exe"
-	debugBin   = "__debug_bin.exe"
-)
+const testSuffix = ".test.exe"

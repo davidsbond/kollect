@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 package bufplugin
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -25,9 +23,7 @@ import (
 
 	registryv1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
-	"github.com/bufbuild/buf/private/pkg/app/appproto"
 	"github.com/bufbuild/buf/private/pkg/encoding"
-	"google.golang.org/protobuf/types/pluginpb"
 )
 
 const (
@@ -46,7 +42,7 @@ const (
 // into remote, owner and name.
 func ParsePluginPath(pluginPath string) (remote string, owner string, name string, _ error) {
 	if pluginPath == "" {
-		return "", "", "", appcmd.NewInvalidArgumentError("a plugin path must be specified")
+		return "", "", "", appcmd.NewInvalidArgumentError("you must specify a plugin path")
 	}
 	components := strings.Split(pluginPath, "/")
 	if len(components) != 4 || components[2] != PluginsPathName {
@@ -77,27 +73,13 @@ func ParsePluginVersionPath(pluginVersionPath string) (remote string, owner stri
 // into remote, owner and name.
 func ParseTemplatePath(templatePath string) (remote string, owner string, name string, _ error) {
 	if templatePath == "" {
-		return "", "", "", appcmd.NewInvalidArgumentError("a template path must be specified")
+		return "", "", "", appcmd.NewInvalidArgumentError("you must specify a template path")
 	}
 	components := strings.Split(templatePath, "/")
 	if len(components) != 4 || components[2] != TemplatesPathName {
 		return "", "", "", appcmd.NewInvalidArgumentErrorf("%s is not a valid template path", templatePath)
 	}
 	return components[0], components[1], components[3], nil
-}
-
-// ParseTemplateVersionPath parses a string in the format <buf.build/owner/templates/name:version>
-// into remote, owner, name and version.
-func ParseTemplateVersionPath(templateVersionPath string) (remote string, owner string, name string, version string, _ error) {
-	remote, owner, name, err := ParseTemplatePath(templateVersionPath)
-	if err != nil {
-		return "", "", "", "", err
-	}
-	components := strings.Split(name, ":")
-	if len(components) != 2 {
-		return "", "", "", "", fmt.Errorf("invalid version: %q", name)
-	}
-	return remote, owner, components[0], components[1], nil
 }
 
 // ValidateTemplateName validates the format of the template name.
@@ -257,75 +239,6 @@ func ParseTemplateVersionConfig(config string) (*TemplateVersionConfig, error) {
 		templateVersionConfig.PluginVersions = append(templateVersionConfig.PluginVersions, PluginVersion(pluginVersion))
 	}
 	return templateVersionConfig, nil
-}
-
-// File represents a generated file
-type File struct {
-	Name    string
-	Content []byte
-}
-
-// MergedPluginResult holds the files for a plugin result.
-type MergedPluginResult struct {
-	Files []*File
-}
-
-// MergeInsertionPoints traverses the plugin results and merges any insertion points present in any responses.
-// The order of inserts depends on the order of the input plugins. The returned results are in the same order
-// as the input plugin results.
-func MergeInsertionPoints(responses []*pluginpb.CodeGeneratorResponse) ([]MergedPluginResult, error) {
-	allFiles := make(map[string]*File)
-	results := make([]MergedPluginResult, len(responses))
-	for i, response := range responses {
-		if response.Error != nil {
-			return nil, fmt.Errorf("unexpected response error: %s", *response.Error)
-		}
-		var files []*File
-		for _, generatedFile := range response.File {
-			fileName := generatedFile.GetName()
-			insertionPoint := generatedFile.GetInsertionPoint()
-			if insertionPoint != "" {
-				parentFile, ok := allFiles[fileName]
-				if !ok {
-					return nil, fmt.Errorf(
-						"response %d requested insertion point in file %q which does not exist",
-						i,
-						fileName,
-					)
-				}
-				newFileContents, err := appproto.ApplyInsertionPoint(
-					context.Background(),
-					generatedFile,
-					bytes.NewBuffer(parentFile.Content),
-				)
-				if err != nil {
-					return nil, fmt.Errorf(
-						"failed to apply insertion point %q in file %q for response %d: %w",
-						insertionPoint,
-						fileName,
-						i,
-						err,
-					)
-				}
-				allFiles[fileName].Content = newFileContents
-				continue
-			}
-			if _, ok := allFiles[fileName]; ok {
-				return nil, fmt.Errorf("file %q defined multiple times", fileName)
-			}
-			file := &File{
-				Name:    fileName,
-				Content: []byte(generatedFile.GetContent()),
-			}
-			files = append(files, file)
-			allFiles[fileName] = file
-		}
-		results[i] = MergedPluginResult{
-			Files: files,
-		}
-	}
-
-	return results, nil
 }
 
 type externalTemplateConfig struct {

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,47 +41,51 @@ type OrganizationService interface {
 		pageSize uint32,
 		pageToken string,
 		reverse bool,
-	) (organizations []*v1alpha1.Organization, nextPageToken string, err error)
+	) (organizations []*v1alpha1.OrganizationMembership, nextPageToken string, err error)
 	// CreateOrganization creates a new organization.
 	CreateOrganization(ctx context.Context, name string) (organization *v1alpha1.Organization, err error)
-	// UpdateOrganizationName updates a organization's name.
-	UpdateOrganizationName(
-		ctx context.Context,
-		id string,
-		newName string,
-	) (organization *v1alpha1.Organization, err error)
-	// UpdateOrganizationNameByName updates a organization's name by name.
-	UpdateOrganizationNameByName(
-		ctx context.Context,
-		name string,
-		newName string,
-	) (organization *v1alpha1.Organization, err error)
 	// DeleteOrganization deletes a organization.
 	DeleteOrganization(ctx context.Context, id string) (err error)
 	// DeleteOrganizationByName deletes a organization by name.
 	DeleteOrganizationByName(ctx context.Context, name string) (err error)
-	// AddOrganizationBaseRepositoryScope adds a base repository scope to an organization by ID.
-	AddOrganizationBaseRepositoryScope(
+	// AddOrganizationMember add a role to an user in the organization.
+	AddOrganizationMember(
 		ctx context.Context,
-		id string,
-		repositoryScope v1alpha1.RepositoryScope,
+		organizationId string,
+		userId string,
+		organizationRole v1alpha1.OrganizationRole,
 	) (err error)
-	// AddOrganizationBaseRepositoryScopeByName adds a base repository scope to an organization by name.
-	AddOrganizationBaseRepositoryScopeByName(
+	// UpdateOrganizationMember update the user's membership information in the organization.
+	UpdateOrganizationMember(
 		ctx context.Context,
-		name string,
-		repositoryScope v1alpha1.RepositoryScope,
+		organizationId string,
+		userId string,
+		organizationRole v1alpha1.OrganizationRole,
 	) (err error)
-	// RemoveOrganizationBaseRepositoryScope removes a base repository scope from an organization by ID.
-	RemoveOrganizationBaseRepositoryScope(
+	// RemoveOrganizationMember remove the role of an user in the organization.
+	RemoveOrganizationMember(
 		ctx context.Context,
-		id string,
-		repositoryScope v1alpha1.RepositoryScope,
+		organizationId string,
+		userId string,
 	) (err error)
-	// RemoveOrganizationBaseRepositoryScopeByName removes a base repository scope from an organization by name.
-	RemoveOrganizationBaseRepositoryScopeByName(
+	// SetOrganizationMember sets the role of a user in the organization.
+	SetOrganizationMember(
 		ctx context.Context,
-		name string,
-		repositoryScope v1alpha1.RepositoryScope,
+		organizationId string,
+		userId string,
+		organizationRole v1alpha1.OrganizationRole,
+	) (err error)
+	// GetOrganizationSettings gets the settings of an organization, including organization base roles.
+	GetOrganizationSettings(
+		ctx context.Context,
+		organizationId string,
+	) (repositoryBaseRole v1alpha1.RepositoryRole, pluginBaseRole v1alpha1.PluginRole, templateBaseRole v1alpha1.TemplateRole, membersCount uint32, err error)
+	// UpdateOrganizationSettings update the organization settings including base roles.
+	UpdateOrganizationSettings(
+		ctx context.Context,
+		organizationId string,
+		repositoryBaseRole v1alpha1.RepositoryRole,
+		pluginBaseRole v1alpha1.PluginRole,
+		templateBaseRole v1alpha1.TemplateRole,
 	) (err error)
 }

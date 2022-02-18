@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -305,6 +305,9 @@ type Enum interface {
 
 	AllowAlias() bool
 	AllowAliasLocation() Location
+
+	// Will return nil if this is a top-level Enum
+	Parent() Message
 }
 
 // EnumValue is an enum value descriptor.
@@ -730,7 +733,7 @@ func NumberToMessageField(message Message) (map[int]Field, error) {
 		numberToMessageField[number] = messageField
 	}
 	for _, messageField := range message.Extensions() {
-		if messageField.Extendee() != "."+message.FullName() {
+		if messageField.Extendee() != message.FullName() {
 			// TODO: ideally we want this field to be returned when
 			// the Extendee message is passed into some function,
 			// need to investigate what index is necessary for that.
@@ -839,6 +842,43 @@ func PackageToNameToService(files ...File) (map[string]map[string]Service, error
 		}
 	}
 	return packageToNameToService, nil
+}
+
+// PackageToDirectlyImportedPackageToFileImports maps packages to directly imported packages
+// to the FileImports that import this package.
+//
+// For example, if package a imports package b via c/d.proto and c/e.proto, this will have
+// a -> b -> [c/d.proto, c/e.proto].
+//
+// A directly imported package will not be equal to the package, i.e. there will be no a -> a.
+//
+// Files with no packages are included with key "" to be consistent with other functions.
+func PackageToDirectlyImportedPackageToFileImports(files ...File) (map[string]map[string][]FileImport, error) {
+	filePathToFile, err := FilePathToFile(files...)
+	if err != nil {
+		return nil, err
+	}
+	packageToDirectlyImportedPackageToFileImports := make(map[string]map[string][]FileImport)
+	for _, file := range files {
+		pkg := file.Package()
+		directlyImportedPackageToFileImports, ok := packageToDirectlyImportedPackageToFileImports[pkg]
+		if !ok {
+			directlyImportedPackageToFileImports = make(map[string][]FileImport)
+			packageToDirectlyImportedPackageToFileImports[pkg] = directlyImportedPackageToFileImports
+		}
+		for _, fileImport := range file.FileImports() {
+			if importedFile, ok := filePathToFile[fileImport.Import()]; ok {
+				importedPkg := importedFile.Package()
+				if importedPkg != pkg {
+					directlyImportedPackageToFileImports[importedFile.Package()] = append(
+						directlyImportedPackageToFileImports[importedPkg],
+						fileImport,
+					)
+				}
+			}
+		}
+	}
+	return packageToDirectlyImportedPackageToFileImports, nil
 }
 
 // NameToMethod maps the Methods in the Service to a map from name to Method.

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,9 +82,10 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) error {
+	bufcli.WarnAlphaCommand(ctx, container)
 	remote := container.Arg(0)
 	if remote == "" {
-		return appcmd.NewInvalidArgumentError("a module remote must be specified")
+		return appcmd.NewInvalidArgumentError("you must specify a remote module")
 	}
 	format, err := bufprint.ParseFormat(flags.Format)
 	if err != nil {

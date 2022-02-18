@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,6 +81,31 @@ func (s *docService) GetSourceFile(
 		return nil, err
 	}
 	return response.Content, nil
+}
+
+// GetModulePackages retrieves the list of packages for the module based on the given
+// owner, repository, and reference.
+func (s *docService) GetModulePackages(
+	ctx context.Context,
+	owner string,
+	repository string,
+	reference string,
+) (name string, modulePackages []*v1alpha1.ModulePackage, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.GetModulePackages(
+		ctx,
+		&v1alpha1.GetModulePackagesRequest{
+			Owner:      owner,
+			Repository: repository,
+			Reference:  reference,
+		},
+	)
+	if err != nil {
+		return "", nil, err
+	}
+	return response.Name, response.ModulePackages, nil
 }
 
 // GetModuleDocumentation retrieves the documentation for module based on the given

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,28 +43,6 @@ func (p *repositoryBranchPrinter) PrintRepositoryBranch(ctx context.Context, for
 		return p.printRepositoryBranchesText([]outputRepositoryBranch{outputBranch})
 	case FormatJSON:
 		return json.NewEncoder(p.writer).Encode(outputBranch)
-	default:
-		return fmt.Errorf("unknown format: %v", format)
-	}
-}
-
-func (p *repositoryBranchPrinter) PrintRepositoryBranches(ctx context.Context, format Format, nextPageToken string, messages ...*registryv1alpha1.RepositoryBranch) error {
-	if len(messages) == 0 {
-		return nil
-	}
-	var outputRepositoryBranches []outputRepositoryBranch
-	for _, repositoryBranch := range messages {
-		outputRepositoryBranch := registryBranchToOutputBranch(repositoryBranch)
-		outputRepositoryBranches = append(outputRepositoryBranches, outputRepositoryBranch)
-	}
-	switch format {
-	case FormatText:
-		return p.printRepositoryBranchesText(outputRepositoryBranches)
-	case FormatJSON:
-		return json.NewEncoder(p.writer).Encode(paginationWrapper{
-			NextPage: nextPageToken,
-			Results:  outputRepositoryBranches,
-		})
 	default:
 		return fmt.Errorf("unknown format: %v", format)
 	}

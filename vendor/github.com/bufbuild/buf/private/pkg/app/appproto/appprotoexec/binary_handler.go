@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@ package appprotoexec
 import (
 	"bytes"
 	"context"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/bufbuild/buf/private/pkg/app"
 	"github.com/bufbuild/buf/private/pkg/app/appproto"
+	"github.com/bufbuild/buf/private/pkg/command"
 	"github.com/bufbuild/buf/private/pkg/protoencoding"
 	"go.opencensus.io/trace"
 	"go.uber.org/zap"
@@ -30,15 +30,18 @@ import (
 
 type binaryHandler struct {
 	logger     *zap.Logger
+	runner     command.Runner
 	pluginPath string
 }
 
 func newBinaryHandler(
 	logger *zap.Logger,
+	runner command.Runner,
 	pluginPath string,
 ) *binaryHandler {
 	return &binaryHandler{
 		logger:     logger.Named("appprotoexec"),
+		runner:     runner,
 		pluginPath: pluginPath,
 	}
 }
@@ -46,33 +49,27 @@ func newBinaryHandler(
 func (h *binaryHandler) Handle(
 	ctx context.Context,
 	container app.EnvStderrContainer,
-	responseWriter appproto.ResponseWriter,
+	responseWriter appproto.ResponseBuilder,
 	request *pluginpb.CodeGeneratorRequest,
 ) error {
 	ctx, span := trace.StartSpan(ctx, "plugin_proxy")
 	span.AddAttributes(trace.StringAttribute("plugin", filepath.Base(h.pluginPath)))
 	defer span.End()
-	unsetRequestVersion := false
-	if request.CompilerVersion == nil {
-		unsetRequestVersion = true
-		request.CompilerVersion = DefaultVersion
-	}
 	requestData, err := protoencoding.NewWireMarshaler().Marshal(request)
-	if unsetRequestVersion {
-		request.CompilerVersion = nil
-	}
 	if err != nil {
 		return err
 	}
 	responseBuffer := bytes.NewBuffer(nil)
-	cmd := exec.CommandContext(ctx, h.pluginPath)
-	cmd.Env = app.Environ(container)
-	cmd.Stdin = bytes.NewReader(requestData)
-	cmd.Stdout = responseBuffer
-	cmd.Stderr = container.Stderr()
-	if err := cmd.Run(); err != nil {
+	if err := h.runner.Run(
+		ctx,
+		h.pluginPath,
+		command.RunWithEnv(app.EnvironMap(container)),
+		command.RunWithStdin(bytes.NewReader(requestData)),
+		command.RunWithStdout(responseBuffer),
+		command.RunWithStderr(container.Stderr()),
+	); err != nil {
 		// TODO: strip binary path as well?
-		return err
+		return handlePotentialTooManyFilesError(err)
 	}
 	response := &pluginpb.CodeGeneratorResponse{}
 	if err := protoencoding.NewWireUnmarshaler(nil).Unmarshal(responseBuffer.Bytes(), response); err != nil {

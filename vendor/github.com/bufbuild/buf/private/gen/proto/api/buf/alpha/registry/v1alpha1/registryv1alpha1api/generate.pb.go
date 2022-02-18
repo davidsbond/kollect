@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ type GenerateService interface {
 		ctx context.Context,
 		image *v1.Image,
 		plugins []*v1alpha1.PluginReference,
+		includeImports bool,
+		includeWellKnownTypes bool,
 	) (responses []*pluginpb.CodeGeneratorResponse, runtimeLibraries []*v1alpha1.RuntimeLibrary, err error)
 	// GenerateTemplate generates an array of files given the provided
 	// module reference and template version.
@@ -41,5 +43,7 @@ type GenerateService interface {
 		templateOwner string,
 		templateName string,
 		templateVersion string,
+		includeImports bool,
+		includeWellKnownTypes bool,
 	) (files []*v1alpha1.File, runtimeLibraries []*v1alpha1.RuntimeLibrary, err error)
 }

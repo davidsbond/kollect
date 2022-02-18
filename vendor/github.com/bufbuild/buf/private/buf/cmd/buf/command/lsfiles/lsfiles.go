@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,20 +20,22 @@ import (
 
 	"github.com/bufbuild/buf/private/buf/bufcli"
 	"github.com/bufbuild/buf/private/buf/buffetch"
+	"github.com/bufbuild/buf/private/bufpkg/bufanalysis"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
-	"github.com/bufbuild/buf/private/pkg/storage/storageos"
+	"github.com/bufbuild/buf/private/pkg/command"
+	"github.com/bufbuild/buf/private/pkg/stringutil"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 const (
-	configFlagName = "config"
-
-	// deprecated
-	inputFlagName = "input"
-	// deprecated
-	inputConfigFlagName = "input-config"
+	asImportPathsFlagName   = "as-import-paths"
+	configFlagName          = "config"
+	errorFormatFlagName     = "error-format"
+	includeImportsFlagName  = "include-imports"
+	disableSymlinksFlagName = "disable-symlinks"
 )
 
 // NewCommand returns a new Command.
@@ -58,12 +60,11 @@ func NewCommand(
 }
 
 type flags struct {
-	Config string
-
-	// deprecated
-	Input string
-	// deprecated
-	InputConfig string
+	AsImportPaths   bool
+	Config          string
+	ErrorFormat     string
+	IncludeImports  bool
+	DisableSymlinks bool
 	// special
 	InputHashtag string
 }
@@ -74,34 +75,34 @@ func newFlags() *flags {
 
 func (f *flags) Bind(flagSet *pflag.FlagSet) {
 	bufcli.BindInputHashtag(flagSet, &f.InputHashtag)
-	flagSet.StringVar(
-		&f.Input,
-		inputFlagName,
-		"",
-		fmt.Sprintf(
-			`The source or image to list the files from. Must be one of format %s.`,
-			buffetch.AllFormatsString,
-		),
+	bufcli.BindDisableSymlinks(flagSet, &f.DisableSymlinks, disableSymlinksFlagName)
+	flagSet.BoolVar(
+		&f.AsImportPaths,
+		asImportPathsFlagName,
+		false,
+		"Strip local directory paths and print filepaths as they are imported.",
 	)
 	flagSet.StringVar(
-		&f.InputConfig,
+		&f.Config,
 		configFlagName,
 		"",
-		`The config file or data to use.`,
+		`The file or data to use for configuration.`,
 	)
-
-	// deprecated
 	flagSet.StringVar(
-		&f.InputConfig,
-		inputConfigFlagName,
-		"",
-		`The config file or data to use.`,
+		&f.ErrorFormat,
+		errorFormatFlagName,
+		"text",
+		fmt.Sprintf(
+			"The format for build errors printed to stderr. Must be one of %s.",
+			stringutil.SliceToString(bufanalysis.AllFormatStrings),
+		),
 	)
-	_ = flagSet.MarkDeprecated(
-		inputConfigFlagName,
-		fmt.Sprintf("use --%s instead.%s", configFlagName, bufcli.FlagDeprecationMessageSuffix),
+	flagSet.BoolVar(
+		&f.IncludeImports,
+		includeImportsFlagName,
+		false,
+		"Include imports.",
 	)
-	_ = flagSet.MarkHidden(inputConfigFlagName)
 }
 
 func run(
@@ -109,24 +110,16 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) error {
-	input, err := bufcli.GetInputValue(container, flags.InputHashtag, flags.Input, inputFlagName, ".")
+	input, err := bufcli.GetInputValue(container, flags.InputHashtag, ".")
 	if err != nil {
 		return err
 	}
-	inputConfig, err := bufcli.GetStringFlagOrDeprecatedFlag(
-		flags.Config,
-		configFlagName,
-		flags.InputConfig,
-		inputConfigFlagName,
-	)
+	ref, err := buffetch.NewRefParser(container.Logger(), buffetch.RefParserWithProtoFileRefAllowed()).GetRef(ctx, input)
 	if err != nil {
 		return err
 	}
-	ref, err := buffetch.NewRefParser(container.Logger()).GetRef(ctx, input)
-	if err != nil {
-		return err
-	}
-	storageosProvider := storageos.NewProvider(storageos.ProviderWithSymlinks())
+	storageosProvider := bufcli.NewStorageosProvider(flags.DisableSymlinks)
+	runner := command.NewRunner()
 	registryProvider, err := bufcli.NewRegistryProvider(ctx, container)
 	if err != nil {
 		return err
@@ -134,23 +127,46 @@ func run(
 	fileLister, err := bufcli.NewWireFileLister(
 		container,
 		storageosProvider,
+		runner,
 		registryProvider,
 	)
 	if err != nil {
 		return err
 	}
-	fileRefs, err := fileLister.ListFiles(
+	fileRefs, fileAnnotations, err := fileLister.ListFiles(
 		ctx,
 		container,
 		ref,
-		inputConfig,
+		flags.Config,
+		flags.IncludeImports,
 	)
 	if err != nil {
 		return err
 	}
-	for _, fileRef := range fileRefs {
-		if _, err := fmt.Fprintln(container.Stdout(), fileRef.ExternalPath()); err != nil {
+	if len(fileAnnotations) > 0 {
+		// stderr since we do output to stdout potentially
+		if err := bufanalysis.PrintFileAnnotations(
+			container.Stderr(),
+			fileAnnotations,
+			flags.ErrorFormat,
+		); err != nil {
 			return err
+		}
+		return bufcli.ErrFileAnnotation
+	}
+	if flags.AsImportPaths {
+		bufmoduleref.SortFileInfos(fileRefs)
+		for _, fileRef := range fileRefs {
+			if _, err := fmt.Fprintln(container.Stdout(), fileRef.Path()); err != nil {
+				return err
+			}
+		}
+	} else {
+		bufmoduleref.SortFileInfosByExternalPath(fileRefs)
+		for _, fileRef := range fileRefs {
+			if _, err := fmt.Fprintln(container.Stdout(), fileRef.ExternalPath()); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

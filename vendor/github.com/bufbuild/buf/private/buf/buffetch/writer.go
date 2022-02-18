@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,4 +45,16 @@ func (w *writer) PutImageFile(
 	imageRef ImageRef,
 ) (io.WriteCloser, error) {
 	return w.internalWriter.PutFile(ctx, container, imageRef.internalFileRef())
+}
+
+func (w *writer) PutSingleFile(
+	ctx context.Context,
+	container app.EnvStdoutContainer,
+	path string,
+) (io.WriteCloser, error) {
+	ref, err := internal.NewSingleRef(path, internal.CompressionTypeNone)
+	if err != nil {
+		return nil, err
+	}
+	return w.internalWriter.PutFile(ctx, container, ref)
 }

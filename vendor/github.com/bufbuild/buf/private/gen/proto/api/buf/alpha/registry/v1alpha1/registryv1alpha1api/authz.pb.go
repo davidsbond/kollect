@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,25 +18,14 @@ package registryv1alpha1api
 
 import (
 	context "context"
+	v1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1"
 )
 
 // AuthzService supplies authorization helpers.
 type AuthzService interface {
-	// UserCanAddUserOrganizationScopes returns whether the user is authorized
-	// to remove user scopes from an organization.
-	UserCanAddUserOrganizationScopes(ctx context.Context, organizationId string) (authorized bool, err error)
-	// UserCanRemoveUserOrganizationScopes returns whether the user is authorized
-	// to remove user scopes from an organization.
-	UserCanRemoveUserOrganizationScopes(ctx context.Context, organizationId string) (authorized bool, err error)
 	// UserCanCreateOrganizationRepository returns whether the user is authorized
 	// to create repositories in an organization.
 	UserCanCreateOrganizationRepository(ctx context.Context, organizationId string) (authorized bool, err error)
-	// UserCanCreateOrganizationTeam returns whether the user is authorized
-	// to create teams in an organization.
-	UserCanCreateOrganizationTeam(ctx context.Context, organizationId string) (authorized bool, err error)
-	// UserCanListOrganizationTeams returns whether the user is authorized
-	// to list teams in an organization.
-	UserCanListOrganizationTeams(ctx context.Context, organizationId string) (authorized bool, err error)
 	// UserCanSeeRepositorySettings returns whether the user is authorized
 	// to see repository settings.
 	UserCanSeeRepositorySettings(ctx context.Context, repositoryId string) (authorized bool, err error)
@@ -83,4 +72,40 @@ type AuthzService interface {
 		owner string,
 		name string,
 	) (authorized bool, err error)
+	// UserCanAddOrganizationMember returns whether the user is authorized to add
+	// any members to the organization and the list of roles they can add.
+	UserCanAddOrganizationMember(ctx context.Context, organizationId string) (authorizedRoles []v1alpha1.OrganizationRole, err error)
+	// UserCanUpdateOrganizationMember returns whether the user is authorized to update
+	// any members' membership information in the organization and the list of roles they can update.
+	UserCanUpdateOrganizationMember(ctx context.Context, organizationId string) (authorizedRoles []v1alpha1.OrganizationRole, err error)
+	// UserCanRemoveOrganizationMember returns whether the user is authorized to remove
+	// any members from the organization and the list of roles they can remove.
+	UserCanRemoveOrganizationMember(ctx context.Context, organizationId string) (authorizedRoles []v1alpha1.OrganizationRole, err error)
+	// UserCanDeleteOrganization returns whether the user is authorized
+	// to delete an organization.
+	UserCanDeleteOrganization(ctx context.Context, organizationId string) (authorized bool, err error)
+	// UserCanDeleteRepository returns whether the user is authorized
+	// to delete a repository.
+	UserCanDeleteRepository(ctx context.Context, repositoryId string) (authorized bool, err error)
+	// UserCanDeleteTemplate returns whether the user is authorized
+	// to delete a template.
+	UserCanDeleteTemplate(ctx context.Context, templateId string) (authorized bool, err error)
+	// UserCanDeletePlugin returns whether the user is authorized
+	// to delete a plugin.
+	UserCanDeletePlugin(ctx context.Context, pluginId string) (authorized bool, err error)
+	// UserCanDeleteUser returns whether the user is authorized
+	// to delete a user.
+	UserCanDeleteUser(ctx context.Context) (authorized bool, err error)
+	// UserCanSeeServerAdminPanel returns whether the user is authorized
+	// to see server admin panel.
+	UserCanSeeServerAdminPanel(ctx context.Context) (authorized bool, err error)
+	// UserCanManageRepositoryContributors returns whether the user is authorized to manage
+	// any contributors to the repository and the list of roles they can manage.
+	UserCanManageRepositoryContributors(ctx context.Context, repositoryId string) (authorizedRoles []v1alpha1.RepositoryRole, err error)
+	// UserCanManagePluginContributors returns whether the user is authorized to manage
+	// any contributors to the plugin and the list of roles they can manage.
+	UserCanManagePluginContributors(ctx context.Context, pluginId string) (authorizedRoles []v1alpha1.PluginRole, err error)
+	// UserCanManageTemplateContributors returns whether the user is authorized to manage
+	// any contributors to the template and the list of roles they can manage.
+	UserCanManageTemplateContributors(ctx context.Context, templateId string) (authorizedRoles []v1alpha1.TemplateRole, err error)
 }

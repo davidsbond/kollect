@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,16 +16,18 @@ package bufmodule
 
 import (
 	"io"
+
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 )
 
 var _ ModuleFile = &moduleFile{}
 
 type moduleFile struct {
-	FileInfo
+	bufmoduleref.FileInfo
 	io.ReadCloser
 }
 
-func newModuleFile(fileInfo FileInfo, readCloser io.ReadCloser) moduleFile {
+func newModuleFile(fileInfo bufmoduleref.FileInfo, readCloser io.ReadCloser) moduleFile {
 	return moduleFile{
 		FileInfo:   fileInfo,
 		ReadCloser: readCloser,

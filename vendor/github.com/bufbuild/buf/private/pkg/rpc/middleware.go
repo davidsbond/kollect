@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ type ServerInfo struct {
 	// Path is the rpc method path.
 	//
 	// This is RPC-system dependent, but will be unique for a given RPC method.
-	// For both Twirp and gRPC, this is /package.Service/Method.
+	// For gRPC, this is /package.Service/Method.
 	//
 	// May be empty, although almost never is in current practice.
 	Path string

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package bufmodule
 import (
 	"context"
 
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/storage"
 )
 
@@ -26,6 +27,6 @@ func newNopModuleResolver() *nopModuleResolver {
 	return &nopModuleResolver{}
 }
 
-func (*nopModuleResolver) GetModulePin(_ context.Context, moduleReference ModuleReference) (ModulePin, error) {
+func (*nopModuleResolver) GetModulePin(_ context.Context, moduleReference bufmoduleref.ModuleReference) (bufmoduleref.ModulePin, error) {
 	return nil, storage.NewErrNotExist(moduleReference.String())
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,38 +21,35 @@ import (
 	"github.com/bufbuild/buf/private/buf/bufcli"
 	"github.com/bufbuild/buf/private/bufpkg/bufanalysis"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
+	"github.com/bufbuild/buf/private/pkg/command"
 	"github.com/bufbuild/buf/private/pkg/rpc"
-	"github.com/bufbuild/buf/private/pkg/storage/storageos"
 	"github.com/bufbuild/buf/private/pkg/stringutil"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 const (
-	//banchFlagName      = "branch"
-	//branchFlagShortName = "b"
-	tagFlagName         = "tag"
-	tagFlagShortName    = "t"
-	errorFormatFlagName = "error-format"
+	trackFlagName           = "track"
+	tagFlagName             = "tag"
+	tagFlagShortName        = "t"
+	errorFormatFlagName     = "error-format"
+	disableSymlinksFlagName = "disable-symlinks"
 )
 
 // NewCommand returns a new Command.
 func NewCommand(
 	name string,
 	builder appflag.Builder,
-	deprecated string,
-	hidden bool,
 ) *appcmd.Command {
 	flags := newFlags()
 	return &appcmd.Command{
-		Use:        name + " <input>",
-		Short:      "Push a module to a registry.",
-		Long:       bufcli.GetInputLong(`the source or module to push`),
-		Args:       cobra.MaximumNArgs(1),
-		Deprecated: deprecated,
-		Hidden:     hidden,
+		Use:   name + " <source>",
+		Short: "Push a module to a registry.",
+		Long:  bufcli.GetSourceLong(`the source to push`),
+		Args:  cobra.MaximumNArgs(1),
 		Run: builder.NewRunFunc(
 			func(ctx context.Context, container appflag.Container) error {
 				return run(ctx, container, flags)
@@ -64,9 +61,10 @@ func NewCommand(
 }
 
 type flags struct {
-	//Branch      string
-	Tags        []string
-	ErrorFormat string
+	Tracks          []string
+	Tags            []string
+	ErrorFormat     string
+	DisableSymlinks bool
 	// special
 	InputHashtag string
 }
@@ -77,26 +75,26 @@ func newFlags() *flags {
 
 func (f *flags) Bind(flagSet *pflag.FlagSet) {
 	bufcli.BindInputHashtag(flagSet, &f.InputHashtag)
-	//flagSet.StringVarP(
-	//	&f.Branch,
-	//	branchFlagName,
-	//	branchFlagShortName,
-	//	bufmodule.MainBranch,
-	//	`The branch to push to.`,
-	//)
+	bufcli.BindDisableSymlinks(flagSet, &f.DisableSymlinks, disableSymlinksFlagName)
+	flagSet.StringSliceVar(
+		&f.Tracks,
+		trackFlagName,
+		nil,
+		"Append the pushed module to this track. Multiple tracks are appended if specified multiple times.",
+	)
 	flagSet.StringSliceVarP(
 		&f.Tags,
 		tagFlagName,
 		tagFlagShortName,
 		nil,
-		"Create a tag for the pushed commit. If specified multiple times, multiple tags will be created.",
+		"Create a tag for the pushed commit. Multiple tracks are appended if specified multiple times.",
 	)
 	flagSet.StringVar(
 		&f.ErrorFormat,
 		errorFormatFlagName,
 		"text",
 		fmt.Sprintf(
-			"The format for build errors, printed to stderr. Must be one of %s.",
+			"The format for build errors printed to stderr. Must be one of %s.",
 			stringutil.SliceToString(bufanalysis.AllFormatStrings),
 		),
 	)
@@ -107,23 +105,22 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) (retErr error) {
-	//if flags.Branch == "" {
-	//	return appcmd.NewInvalidArgumentErrorf("required flag %q not set", branchFlagName)
-	//}
 	if err := bufcli.ValidateErrorFormatFlag(flags.ErrorFormat, errorFormatFlagName); err != nil {
 		return err
 	}
-	source, err := bufcli.GetInputValue(container, flags.InputHashtag, "", "", ".")
+	source, err := bufcli.GetInputValue(container, flags.InputHashtag, ".")
 	if err != nil {
 		return err
 	}
-	storageosProvider := storageos.NewProvider(storageos.ProviderWithSymlinks())
+	storageosProvider := bufcli.NewStorageosProvider(flags.DisableSymlinks)
+	runner := command.NewRunner()
 	// We are pushing to the BSR, this module has to be independently buildable
 	// given the configuration it has without any enclosing workspace.
 	module, moduleIdentity, err := bufcli.ReadModuleWithWorkspacesDisabled(
 		ctx,
 		container,
 		storageosProvider,
+		runner,
 		source,
 	)
 	if err != nil {
@@ -141,19 +138,23 @@ func run(
 	if err != nil {
 		return err
 	}
+	tracks := flags.Tracks
+	if tracks == nil {
+		tracks = []string{bufmoduleref.MainTrack}
+	}
 	localModulePin, err := service.Push(
 		ctx,
 		moduleIdentity.Owner(),
 		moduleIdentity.Repository(),
-		//flags.Branch,
-		bufmodule.MainBranch,
+		"",
 		protoModule,
 		flags.Tags,
+		tracks,
 	)
 	if err != nil {
 		if rpc.GetErrorCode(err) == rpc.ErrorCodeAlreadyExists {
 			if _, err := container.Stderr().Write(
-				[]byte("The latest commit has the same content, not creating a new commit."),
+				[]byte("The latest commit has the same content; not creating a new commit.\n"),
 			); err != nil {
 				return err
 			}

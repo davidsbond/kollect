@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,9 +26,4 @@ func newInvalidArgumentError(message string) *invalidArgumentError {
 
 func (a *invalidArgumentError) Error() string {
 	return a.message
-}
-
-func (a *invalidArgumentError) Is(err error) bool {
-	_, ok := err.(*invalidArgumentError)
-	return ok
 }

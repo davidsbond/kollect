@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"github.com/bufbuild/buf/private/bufpkg/bufimage"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
+	"github.com/bufbuild/buf/private/pkg/command"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
 	"github.com/bufbuild/buf/private/pkg/stringutil"
 	"github.com/spf13/cobra"
@@ -39,13 +40,9 @@ const (
 	configFlagName              = "config"
 	pathsFlagName               = "path"
 	includeImportsFlagName      = "include-imports"
-
-	// deprecated
-	inputFlagName = "input"
-	// deprecated
-	inputConfigFlagName = "input-config"
-	// deprecated
-	filesFlagName = "file"
+	includeWKTFlagName          = "include-wkt"
+	excludePathsFlagName        = "exclude-path"
+	disableSymlinksFlagName     = "disable-symlinks"
 )
 
 // NewCommand returns a new Command.
@@ -143,7 +140,7 @@ $ buf generate --template buf.gen.yaml .
 # --template also takes YAML or JSON data as input, so it can be used without a file
 $ buf generate --template '{"version":"v1","plugins":[{"name":"go","out":"gen/go"}]}'
 
-# download the repository, compile it, and generate per the bar.yaml template
+# download the repository and generate code stubs per the bar.yaml template
 $ buf generate --template bar.yaml https://github.com/foo/bar.git
 
 # generate to the bar/ directory, prepending bar/ to the out directives in the template
@@ -169,7 +166,7 @@ as "proto/foo" is contained within "proto".
 
 Plugins are invoked in the order they are specified in the template, but each plugin
 has a per-directory parallel invocation, with results from each invocation combined
-before writing the result. This is equivalent behavior to "buf protoc --by_dir".
+before writing the result.
 
 Insertion points are processed in the order the plugins are specified in the template.
 `,
@@ -185,18 +182,16 @@ Insertion points are processed in the order the plugins are specified in the tem
 }
 
 type flags struct {
-	Template       string
-	BaseOutDirPath string
-	ErrorFormat    string
-	Files          []string
-	Config         string
-	Paths          []string
-	IncludeImports bool
-
-	// deprecated
-	Input string
-	// deprecated
-	InputConfig string
+	Template        string
+	BaseOutDirPath  string
+	ErrorFormat     string
+	Files           []string
+	Config          string
+	Paths           []string
+	IncludeImports  bool
+	IncludeWKT      bool
+	ExcludePaths    []string
+	DisableSymlinks bool
 	// special
 	InputHashtag string
 }
@@ -206,13 +201,24 @@ func newFlags() *flags {
 }
 
 func (f *flags) Bind(flagSet *pflag.FlagSet) {
+	bufcli.BindDisableSymlinks(flagSet, &f.DisableSymlinks, disableSymlinksFlagName)
 	bufcli.BindInputHashtag(flagSet, &f.InputHashtag)
-	bufcli.BindPathsAndDeprecatedFiles(flagSet, &f.Paths, pathsFlagName, &f.Files, filesFlagName)
+	bufcli.BindPaths(flagSet, &f.Paths, pathsFlagName)
+	bufcli.BindExcludePaths(flagSet, &f.ExcludePaths, excludePathsFlagName)
 	flagSet.BoolVar(
 		&f.IncludeImports,
 		includeImportsFlagName,
 		false,
 		"Also generate all imports except for Well-Known Types.",
+	)
+	flagSet.BoolVar(
+		&f.IncludeWKT,
+		includeWKTFlagName,
+		false,
+		fmt.Sprintf(
+			"Also generate Well-Known Types. Cannot be set without --%s.",
+			includeImportsFlagName,
+		),
 	)
 	flagSet.StringVar(
 		&f.Template,
@@ -240,36 +246,8 @@ func (f *flags) Bind(flagSet *pflag.FlagSet) {
 		&f.Config,
 		configFlagName,
 		"",
-		`The config file or data to use.`,
+		`The file or data to use for configuration.`,
 	)
-
-	// deprecated
-	flagSet.StringVar(
-		&f.Input,
-		inputFlagName,
-		"",
-		fmt.Sprintf(
-			`The source or image to generate for. Must be one of format %s.`,
-			buffetch.AllFormatsString,
-		),
-	)
-	_ = flagSet.MarkDeprecated(
-		inputFlagName,
-		`input as the first argument instead.`+bufcli.FlagDeprecationMessageSuffix,
-	)
-	_ = flagSet.MarkHidden(inputFlagName)
-	// deprecated
-	flagSet.StringVar(
-		&f.InputConfig,
-		inputConfigFlagName,
-		"",
-		`The config file or data to use.`,
-	)
-	_ = flagSet.MarkDeprecated(
-		inputConfigFlagName,
-		fmt.Sprintf("use --%s instead.%s", configFlagName, bufcli.FlagDeprecationMessageSuffix),
-	)
-	_ = flagSet.MarkHidden(inputConfigFlagName)
 }
 
 func run(
@@ -278,36 +256,26 @@ func run(
 	flags *flags,
 ) (retErr error) {
 	logger := container.Logger()
+	if flags.IncludeWKT && !flags.IncludeImports {
+		// You need to set --include-imports if you set --include-wkt, which isn’t great. The alternative is to have
+		// --include-wkt implicitly set --include-imports, but this could be surprising. Or we could rename
+		// --include-wkt to --include-imports-and/with-wkt. But the summary is that the flag only makes sense
+		// in the context of including imports.
+		return appcmd.NewInvalidArgumentErrorf("Cannot set --%s without --%s", includeWKTFlagName, includeImportsFlagName)
+	}
 	if err := bufcli.ValidateErrorFormatFlag(flags.ErrorFormat, errorFormatFlagName); err != nil {
 		return err
 	}
-	input, err := bufcli.GetInputValue(container, flags.InputHashtag, flags.Input, inputFlagName, ".")
+	input, err := bufcli.GetInputValue(container, flags.InputHashtag, ".")
 	if err != nil {
 		return err
 	}
-	inputConfig, err := bufcli.GetStringFlagOrDeprecatedFlag(
-		flags.Config,
-		configFlagName,
-		flags.InputConfig,
-		inputConfigFlagName,
-	)
+	ref, err := buffetch.NewRefParser(container.Logger(), buffetch.RefParserWithProtoFileRefAllowed()).GetRef(ctx, input)
 	if err != nil {
 		return err
 	}
-	paths, err := bufcli.GetStringSliceFlagOrDeprecatedFlag(
-		flags.Paths,
-		pathsFlagName,
-		flags.Files,
-		filesFlagName,
-	)
-	if err != nil {
-		return err
-	}
-	ref, err := buffetch.NewRefParser(logger).GetRef(ctx, input)
-	if err != nil {
-		return err
-	}
-	storageosProvider := storageos.NewProvider(storageos.ProviderWithSymlinks())
+	storageosProvider := bufcli.NewStorageosProvider(flags.DisableSymlinks)
+	runner := command.NewRunner()
 	readWriteBucket, err := storageosProvider.NewReadWriteBucket(
 		".",
 		storageos.ReadWriteBucketWithSymlinksIfSupported(),
@@ -331,6 +299,7 @@ func run(
 	imageConfigReader, err := bufcli.NewWireImageConfigReader(
 		container,
 		storageosProvider,
+		runner,
 		registryProvider,
 	)
 	if err != nil {
@@ -340,10 +309,11 @@ func run(
 		ctx,
 		container,
 		ref,
-		inputConfig,
-		paths, // we filter on files
-		false, // input files must exist
-		false, // we must include source info for generation
+		flags.Config,
+		flags.Paths,        // we filter on files
+		flags.ExcludePaths, // we exclude these paths
+		false,              // input files must exist
+		false,              // we must include source info for generation
 	)
 	if err != nil {
 		return err
@@ -371,9 +341,16 @@ func run(
 			bufgen.GenerateWithIncludeImports(),
 		)
 	}
+	if flags.IncludeWKT {
+		generateOptions = append(
+			generateOptions,
+			bufgen.GenerateWithIncludeWellKnownTypes(),
+		)
+	}
 	return bufgen.NewGenerator(
 		logger,
 		storageosProvider,
+		runner,
 		registryProvider,
 	).Generate(
 		ctx,

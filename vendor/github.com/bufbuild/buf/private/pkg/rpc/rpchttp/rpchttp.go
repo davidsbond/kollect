@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 
 // NewServerInterceptor returns a new server interceptor for http.
 //
-// This should be the last interceptor installed, except for twirp.
+// This should be the last interceptor installed.
 func NewServerInterceptor() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -45,7 +45,7 @@ func NewServerInterceptor() func(http.Handler) http.Handler {
 
 // NewClientInterceptor returns a new client interceptor for http.
 //
-// This should be the last interceptor installed, except for twirp.
+// This should be the last interceptor installed.
 func NewClientInterceptor(next http.RoundTripper) http.RoundTripper {
 	return newHTTPRoundTripper(next)
 }

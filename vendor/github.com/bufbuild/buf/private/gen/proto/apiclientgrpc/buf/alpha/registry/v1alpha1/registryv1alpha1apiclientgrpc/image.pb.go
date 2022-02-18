@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,10 @@ func (s *imageService) GetImage(
 	owner string,
 	repository string,
 	reference string,
+	excludeImports bool,
+	excludeSourceInfo bool,
+	types []string,
+	includeMask []v1alpha1.ImageMask,
 ) (image *v1.Image, _ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
@@ -43,9 +47,13 @@ func (s *imageService) GetImage(
 	response, err := s.client.GetImage(
 		ctx,
 		&v1alpha1.GetImageRequest{
-			Owner:      owner,
-			Repository: repository,
-			Reference:  reference,
+			Owner:             owner,
+			Repository:        repository,
+			Reference:         reference,
+			ExcludeImports:    excludeImports,
+			ExcludeSourceInfo: excludeSourceInfo,
+			Types:             types,
+			IncludeMask:       includeMask,
 		},
 	)
 	if err != nil {

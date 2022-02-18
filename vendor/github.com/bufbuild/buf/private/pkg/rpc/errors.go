@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -369,6 +369,18 @@ func GetErrorCode(err error) ErrorCode {
 	return ErrorCodeInternal
 }
 
+// GetErrorMessage gets the rpc error message, if there is an RPC
+// error in the error chain. If not, it returns an empty string.
+func GetErrorMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	if rpcErr := (&rpcError{}); errors.As(err, &rpcErr) {
+		return rpcErr.message
+	}
+	return ""
+}
+
 // IsError returns true if err is an error created by this package.
 //
 // If the error is nil, this returns false.
@@ -376,7 +388,8 @@ func IsError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return errors.Is(err, &rpcError{})
+	rpcErr := &rpcError{}
+	return errors.As(err, &rpcErr)
 }
 
 type rpcError struct {
@@ -401,9 +414,4 @@ func newRPCError(errorCode ErrorCode, message string) *rpcError {
 
 func (r *rpcError) Error() string {
 	return r.message
-}
-
-func (r *rpcError) Is(err error) bool {
-	_, ok := err.(*rpcError)
-	return ok
 }
