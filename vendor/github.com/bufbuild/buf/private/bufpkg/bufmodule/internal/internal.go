@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,11 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/bufbuild/buf/private/pkg/normalpath"
 )
-
-// ErrNoTargetFiles is the error returned if there are no target files found.
-var ErrNoTargetFiles = errors.New("no .proto target files found")
 
 // NormalizeAndCheckPaths verifies that:
 //

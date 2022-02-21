@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/bufbuild/buf/private/pkg/command"
 	"github.com/bufbuild/buf/private/pkg/diff"
 )
 
@@ -77,15 +78,30 @@ func DiffWithExternalPathPrefixes(
 	}
 }
 
+// DiffWithTransform returns a DiffOption that adds a transform function. The transform function will be run on each
+// file being compared before it is diffed. transform takes the arguments:
+//  side: one or two whether it is the first or second item in the diff
+//  filename: the filename including path
+//  content: the file content.
+// transform returns a string that is the transformed content of filename.
+func DiffWithTransform(
+	transform func(side string, filename string, content []byte) []byte,
+) DiffOption {
+	return func(diffOptions *diffOptions) {
+		diffOptions.transforms = append(diffOptions.transforms, transform)
+	}
+}
+
 // DiffBytes does a diff of the ReadBuckets.
 func DiffBytes(
 	ctx context.Context,
+	runner command.Runner,
 	one ReadBucket,
 	two ReadBucket,
 	options ...DiffOption,
 ) ([]byte, error) {
 	buffer := bytes.NewBuffer(nil)
-	if err := Diff(ctx, buffer, one, two, options...); err != nil {
+	if err := Diff(ctx, runner, buffer, one, two, options...); err != nil {
 		return nil, err
 	}
 	return buffer.Bytes(), nil
@@ -94,6 +110,7 @@ func DiffBytes(
 // Diff writes a diff of the ReadBuckets to the Writer.
 func Diff(
 	ctx context.Context,
+	runner command.Runner,
 	writer io.Writer,
 	one ReadBucket,
 	two ReadBucket,
@@ -160,8 +177,13 @@ func Diff(
 				return err
 			}
 		}
+		for _, transform := range diffOptions.transforms {
+			oneData = transform("one", oneDiffPath, oneData)
+			twoData = transform("two", twoDiffPath, twoData)
+		}
 		diffData, err := diff.Diff(
 			ctx,
+			runner,
 			oneData,
 			twoData,
 			oneDiffPath,
@@ -203,6 +225,7 @@ func Diff(
 			}
 			diffData, err := diff.Diff(
 				ctx,
+				runner,
 				nil,
 				twoData,
 				oneDiffPath,
@@ -273,6 +296,7 @@ type diffOptions struct {
 	externalPaths         bool
 	oneExternalPathPrefix string
 	twoExternalPathPrefix string
+	transforms            []func(side string, filename string, content []byte) []byte
 }
 
 func newDiffOptions() *diffOptions {

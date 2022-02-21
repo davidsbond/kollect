@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ func (f *flags) Bind(flagSet *pflag.FlagSet) {
 		&f.Config,
 		configFlagName,
 		"",
-		"The template config file or data to use. Must be in either YAML or JSON format.",
+		"The template file or data to use for configuration. Must be in either YAML or JSON format.",
 	)
 	_ = cobra.MarkFlagRequired(flagSet, configFlagName)
 	flagSet.StringVar(
@@ -91,6 +91,7 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) error {
+	bufcli.WarnBetaCommand(ctx, container)
 	templatePath := container.Arg(0)
 	format, err := bufprint.ParseFormat(flags.Format)
 	if err != nil {

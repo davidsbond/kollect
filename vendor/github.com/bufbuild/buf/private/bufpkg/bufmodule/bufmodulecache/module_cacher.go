@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/bufbuild/buf/private/bufpkg/buflock"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/storage"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
@@ -44,7 +45,7 @@ func newModuleCacher(
 
 func (m *moduleCacher) GetModule(
 	ctx context.Context,
-	modulePin bufmodule.ModulePin,
+	modulePin bufmoduleref.ModulePin,
 ) (bufmodule.Module, error) {
 	modulePath := newCacheKey(modulePin)
 	// We do not want the external path of the cache to be propagated to the user.
@@ -95,7 +96,7 @@ func (m *moduleCacher) GetModule(
 		// Note that we deal with invalid data in the cache at the ModuleReader level by overwriting via PutModule
 		return nil, storage.NewErrNotExist(modulePath)
 	}
-	digest, err := bufmodule.ModuleDigestB2(ctx, module)
+	digest, err := bufmodule.ModuleDigestB3(ctx, module)
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +116,11 @@ func (m *moduleCacher) GetModule(
 
 func (m *moduleCacher) PutModule(
 	ctx context.Context,
-	modulePin bufmodule.ModulePin,
+	modulePin bufmoduleref.ModulePin,
 	module bufmodule.Module,
 ) error {
 	modulePath := newCacheKey(modulePin)
-	digest, err := bufmodule.ModuleDigestB2(ctx, module)
+	digest, err := bufmodule.ModuleDigestB3(ctx, module)
 	if err != nil {
 		return err
 	}

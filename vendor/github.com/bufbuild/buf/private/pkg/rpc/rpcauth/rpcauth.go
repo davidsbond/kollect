@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,8 @@ func GetUser(ctx context.Context) (*User, bool) {
 	}
 	// This is the only package where we can set this context key, so
 	// this is guaranteed to be of this type if it exists.
-	return userValue.(*User), true
+	user, ok := userValue.(*User)
+	return user, ok
 }
 
 // WithToken adds the token to the context via a header.
@@ -58,6 +59,15 @@ func WithToken(ctx context.Context, token string) context.Context {
 		return rpc.WithOutgoingHeader(ctx, authenticationHeader, authenticationTokenPrefix+token)
 	}
 	return ctx
+}
+
+// WithTokenIfNoneSet adds the token to the context via a header if none is already set.
+// If a token is already set on the header, this function just returns the context as is.
+func WithTokenIfNoneSet(ctx context.Context, token string) context.Context {
+	if rpc.GetOutgoingHeader(ctx, authenticationHeader) != "" {
+		return ctx
+	}
+	return WithToken(ctx, token)
 }
 
 // GetTokenFromHeader gets the current authentication token, if

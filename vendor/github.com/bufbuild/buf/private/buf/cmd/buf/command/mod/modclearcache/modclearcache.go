@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,18 +32,14 @@ import (
 func NewCommand(
 	name string,
 	builder appflag.Builder,
-	deprecated string,
-	hidden bool,
 	aliases ...string,
 ) *appcmd.Command {
 	flags := newFlags()
 	return &appcmd.Command{
-		Use:        name,
-		Aliases:    aliases,
-		Short:      "Clear the module cache.",
-		Args:       cobra.NoArgs,
-		Deprecated: deprecated,
-		Hidden:     hidden,
+		Use:     name,
+		Aliases: aliases,
+		Short:   "Clears the Buf module cache.",
+		Args:    cobra.NoArgs,
 		Run: builder.NewRunFunc(
 			func(ctx context.Context, container appflag.Container) error {
 				return run(ctx, container, flags)

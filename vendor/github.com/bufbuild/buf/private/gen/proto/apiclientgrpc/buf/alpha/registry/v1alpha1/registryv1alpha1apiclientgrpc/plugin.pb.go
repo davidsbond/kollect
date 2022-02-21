@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,6 +106,30 @@ func (s *pluginService) ListOrganizationPlugins(
 	return response.Plugins, response.NextPageToken, nil
 }
 
+// GetPluginVersion returns the plugin version, if found.
+func (s *pluginService) GetPluginVersion(
+	ctx context.Context,
+	owner string,
+	name string,
+	version string,
+) (pluginVersion *v1alpha1.PluginVersion, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.GetPluginVersion(
+		ctx,
+		&v1alpha1.GetPluginVersionRequest{
+			Owner:   owner,
+			Name:    name,
+			Version: version,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return response.PluginVersion, nil
+}
+
 // ListPluginVersions lists all the versions available for the specified plugin.
 func (s *pluginService) ListPluginVersions(
 	ctx context.Context,
@@ -194,6 +218,104 @@ func (s *pluginService) DeletePlugin(
 	_, err := s.client.DeletePlugin(
 		ctx,
 		&v1alpha1.DeletePluginRequest{
+			Owner: owner,
+			Name:  name,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetPluginContributor sets the role of a user in the plugin.
+func (s *pluginService) SetPluginContributor(
+	ctx context.Context,
+	pluginId string,
+	userId string,
+	pluginRole v1alpha1.PluginRole,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.SetPluginContributor(
+		ctx,
+		&v1alpha1.SetPluginContributorRequest{
+			PluginId:   pluginId,
+			UserId:     userId,
+			PluginRole: pluginRole,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ListPluginContributors returns the list of contributors that has an explicit role against the plugin.
+// This does not include users who have implicit roles against the plugin, unless they have also been
+// assigned a role explicitly.
+func (s *pluginService) ListPluginContributors(
+	ctx context.Context,
+	pluginId string,
+	pageSize uint32,
+	pageToken string,
+	reverse bool,
+) (users []*v1alpha1.PluginContributor, nextPageToken string, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.ListPluginContributors(
+		ctx,
+		&v1alpha1.ListPluginContributorsRequest{
+			PluginId:  pluginId,
+			PageSize:  pageSize,
+			PageToken: pageToken,
+			Reverse:   reverse,
+		},
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	return response.Users, response.NextPageToken, nil
+}
+
+// DeprecatePlugin deprecates the plugin, if found.
+func (s *pluginService) DeprecatePlugin(
+	ctx context.Context,
+	owner string,
+	name string,
+	message string,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.DeprecatePlugin(
+		ctx,
+		&v1alpha1.DeprecatePluginRequest{
+			Owner:   owner,
+			Name:    name,
+			Message: message,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UndeprecatePlugin makes the plugin not deprecated and removes any deprecation_message.
+func (s *pluginService) UndeprecatePlugin(
+	ctx context.Context,
+	owner string,
+	name string,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.UndeprecatePlugin(
+		ctx,
+		&v1alpha1.UndeprecatePluginRequest{
 			Owner: owner,
 			Name:  name,
 		},
@@ -428,4 +550,102 @@ func (s *pluginService) CreateTemplateVersion(
 		return nil, err
 	}
 	return response.TemplateVersion, nil
+}
+
+// SetTemplateContributor sets the role of a user in the template.
+func (s *pluginService) SetTemplateContributor(
+	ctx context.Context,
+	templateId string,
+	userId string,
+	templateRole v1alpha1.TemplateRole,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.SetTemplateContributor(
+		ctx,
+		&v1alpha1.SetTemplateContributorRequest{
+			TemplateId:   templateId,
+			UserId:       userId,
+			TemplateRole: templateRole,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ListTemplateContributors returns the list of contributors that has an explicit role against the template.
+// This does not include users who have implicit roles against the template, unless they have also been
+// assigned a role explicitly.
+func (s *pluginService) ListTemplateContributors(
+	ctx context.Context,
+	templateId string,
+	pageSize uint32,
+	pageToken string,
+	reverse bool,
+) (users []*v1alpha1.TemplateContributor, nextPageToken string, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.ListTemplateContributors(
+		ctx,
+		&v1alpha1.ListTemplateContributorsRequest{
+			TemplateId: templateId,
+			PageSize:   pageSize,
+			PageToken:  pageToken,
+			Reverse:    reverse,
+		},
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	return response.Users, response.NextPageToken, nil
+}
+
+// DeprecateTemplate deprecates the template, if found.
+func (s *pluginService) DeprecateTemplate(
+	ctx context.Context,
+	owner string,
+	name string,
+	message string,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.DeprecateTemplate(
+		ctx,
+		&v1alpha1.DeprecateTemplateRequest{
+			Owner:   owner,
+			Name:    name,
+			Message: message,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UndeprecateTemplate makes the template not deprecated and removes any deprecation_message.
+func (s *pluginService) UndeprecateTemplate(
+	ctx context.Context,
+	owner string,
+	name string,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.UndeprecateTemplate(
+		ctx,
+		&v1alpha1.UndeprecateTemplateRequest{
+			Owner: owner,
+			Name:  name,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }

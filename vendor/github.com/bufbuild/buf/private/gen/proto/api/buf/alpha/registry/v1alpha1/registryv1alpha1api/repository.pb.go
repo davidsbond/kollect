@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,33 +63,43 @@ type RepositoryService interface {
 		fullName string,
 		visibility v1alpha1.Visibility,
 	) (repository *v1alpha1.Repository, err error)
-	// UpdateRepositoryName updates a repository's name.
-	UpdateRepositoryName(
-		ctx context.Context,
-		id string,
-		newName string,
-	) (repository *v1alpha1.Repository, err error)
-	// UpdateRepositoryNameByFullName updates a repository's name by full name.
-	UpdateRepositoryNameByFullName(
-		ctx context.Context,
-		fullName string,
-		newName string,
-	) (repository *v1alpha1.Repository, err error)
-	// UpdateRepositoryVisibility updates a repository's visibility.
-	UpdateRepositoryVisibility(
-		ctx context.Context,
-		id string,
-		newVisibility v1alpha1.Visibility,
-	) (repository *v1alpha1.Repository, err error)
-	// UpdateRepositoryVisibilityByName updates a repository's visibility by name.
-	UpdateRepositoryVisibilityByName(
-		ctx context.Context,
-		ownerName string,
-		repositoryName string,
-		newVisibility v1alpha1.Visibility,
-	) (repository *v1alpha1.Repository, err error)
 	// DeleteRepository deletes a repository.
 	DeleteRepository(ctx context.Context, id string) (err error)
 	// DeleteRepositoryByFullName deletes a repository by full name.
 	DeleteRepositoryByFullName(ctx context.Context, fullName string) (err error)
+	// DeprecateRepositoryByName deprecates the repository.
+	DeprecateRepositoryByName(
+		ctx context.Context,
+		ownerName string,
+		repositoryName string,
+		deprecationMessage string,
+	) (repository *v1alpha1.Repository, err error)
+	// UndeprecateRepositoryByName makes the repository not deprecated and removes any deprecation_message.
+	UndeprecateRepositoryByName(
+		ctx context.Context,
+		ownerName string,
+		repositoryName string,
+	) (repository *v1alpha1.Repository, err error)
+	// GetRepositoriesByFullName gets repositories by full name. Response order is unspecified.
+	// Errors if any of the repositories don't exist or the caller does not have access to any of the repositories.
+	GetRepositoriesByFullName(ctx context.Context, fullNames []string) (repositories []*v1alpha1.Repository, err error)
+	// SetRepositoryContributor sets the role of a user in the repository.
+	SetRepositoryContributor(
+		ctx context.Context,
+		repositoryId string,
+		userId string,
+		repositoryRole v1alpha1.RepositoryRole,
+	) (err error)
+	// ListRepositoryContributors returns the list of contributors that has an explicit role against the repository.
+	// This does not include users who have implicit roles against the repository, unless they have also been
+	// assigned a role explicitly.
+	ListRepositoryContributors(
+		ctx context.Context,
+		repositoryId string,
+		pageSize uint32,
+		pageToken string,
+		reverse bool,
+	) (users []*v1alpha1.RepositoryContributor, nextPageToken string, err error)
+	// GetRepositorySettings gets the settings of a repository.
+	GetRepositorySettings(ctx context.Context, repositoryId string) (contributorsCount uint32, err error)
 }

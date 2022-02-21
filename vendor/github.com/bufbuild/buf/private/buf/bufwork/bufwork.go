@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,6 +55,8 @@
 // file. For example, it's not possible to build input "paymentapis/acme" since the image
 // would otherwise include the content defined in paymentapis/acme/payment/v2/payment.proto as
 // acme/payment/v2/payment.proto and payment/v2/payment.proto.
+//
+// EVERYTHING IN THIS PACKAGE SHOULD ONLY BE CALLED BY THE CLI AND CANNOT BE USED IN SERVICES.
 package bufwork
 
 import (
@@ -62,12 +64,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/bufbuild/buf/private/buf/bufconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulebuild"
 	"github.com/bufbuild/buf/private/pkg/normalpath"
 	"github.com/bufbuild/buf/private/pkg/storage"
-	"go.uber.org/zap"
 )
 
 const (
@@ -94,42 +95,49 @@ var (
 	}
 )
 
-// NewWorkspace returns a new workspace.
-func NewWorkspace(
-	ctx context.Context,
-	config *Config,
-	readBucket storage.ReadBucket,
-	configProvider bufconfig.Provider,
+// WorkspaceBuilder builds workspaces. A single WorkspaceBuilder should NOT be persisted
+// acorss calls because the WorkspaceBuilder caches the modules used in each workspace.
+type WorkspaceBuilder interface {
+	// BuildWorkspace builds a bufmodule.Workspace for the given targetSubDirPath.
+	BuildWorkspace(
+		ctx context.Context,
+		workspaceConfig *Config,
+		readBucket storage.ReadBucket,
+		relativeRootPath string,
+		targetSubDirPath string,
+		configOverride string,
+		externalDirOrFilePaths []string,
+		externalExcludeDirOrFilePaths []string,
+		externalDirOrFilePathsAllowNotExist bool,
+	) (bufmodule.Workspace, error)
+
+	// GetModuleConfig returns the bufmodule.Module and *bufconfig.Config, associated with the given
+	// targetSubDirPath, if it exists.
+	GetModuleConfig(targetSubDirPath string) (bufmodule.Module, *bufconfig.Config, bool)
+}
+
+// NewWorkspaceBuilder returns a new WorkspaceBuilder.
+func NewWorkspaceBuilder(
 	moduleBucketBuilder bufmodulebuild.ModuleBucketBuilder,
-	relativeRootPath string,
-	targetSubDirPath string,
-	configOverride string,
-	externalDirOrFilePaths []string,
-	externalDirOrFilePathsAllowNotExist bool,
-) (bufmodule.Workspace, error) {
-	return newWorkspace(
-		ctx,
-		config,
-		readBucket,
-		configProvider,
-		moduleBucketBuilder,
-		relativeRootPath,
-		targetSubDirPath,
-		configOverride,
-		externalDirOrFilePaths,
-		externalDirOrFilePathsAllowNotExist,
-	)
+) WorkspaceBuilder {
+	return newWorkspaceBuilder(moduleBucketBuilder)
 }
 
 // BuildOptionsForWorkspaceDirectory returns the bufmodulebuild.BuildOptions required for
 // the given subDirPath based on the workspace configuration.
+//
+// The subDirRelPaths are the relative paths of the externalDirOrFilePaths that map to the
+// provided subDirPath.
+// The subDirRelExcludePaths are the relative paths of the externalExcludeDirOrFilePaths that map to the
+// provided subDirPath.
 func BuildOptionsForWorkspaceDirectory(
 	ctx context.Context,
 	workspaceConfig *Config,
 	moduleConfig *bufconfig.Config,
-	relativeRootPath string,
-	subDirPath string,
 	externalDirOrFilePaths []string,
+	externalExcludeDirOrFilePaths []string,
+	subDirRelPaths []string,
+	subDirRelExcludePaths []string,
 	externalDirOrFilePathsAllowNotExist bool,
 ) ([]bufmodulebuild.BuildOption, error) {
 	buildOptions := []bufmodulebuild.BuildOption{
@@ -137,16 +145,43 @@ func BuildOptionsForWorkspaceDirectory(
 		// This also may be nil.
 		//
 		// This is particularly useful for the GoPackage modifier used in
-		// Managed Mode, which supports module-specific overrides.
+		// managed mode, which supports module-specific overrides.
 		bufmodulebuild.WithModuleIdentity(moduleConfig.ModuleIdentity),
 	}
-	if len(externalDirOrFilePaths) == 0 {
+	if len(externalDirOrFilePaths) == 0 && len(externalExcludeDirOrFilePaths) == 0 {
 		return buildOptions, nil
 	}
-	// We know that if the file is actually buf.work for legacy reasons, this will be wrong,
-	// but we accept that as this shouldn't happen often anymore and this is just
-	// used for error messages.
-	workspaceID := filepath.Join(normalpath.Unnormalize(relativeRootPath), ExternalConfigV1FilePath)
+	if len(externalDirOrFilePaths) > 0 {
+		// Note that subDirRelPaths can be empty. If so, this represents
+		// the case where externalDirOrFilePaths were provided, but none
+		// matched.
+		if externalDirOrFilePathsAllowNotExist {
+			buildOptions = append(buildOptions, bufmodulebuild.WithPathsAllowNotExist(subDirRelPaths))
+		} else {
+			buildOptions = append(buildOptions, bufmodulebuild.WithPaths(subDirRelPaths))
+		}
+	}
+	if len(externalExcludeDirOrFilePaths) > 0 {
+		// Same as above, subDirRelExcludepaths can be empty. If so, this represents the case
+		// where excludes were provided by were not matched.
+		if externalDirOrFilePathsAllowNotExist {
+			buildOptions = append(buildOptions, bufmodulebuild.WithExcludePathsAllowNotExist(subDirRelExcludePaths))
+		} else {
+			buildOptions = append(buildOptions, bufmodulebuild.WithExcludePaths(subDirRelExcludePaths))
+		}
+	}
+	return buildOptions, nil
+}
+
+// ExternalPathsToSubDirRelPaths returns a map of the external paths provided to their relative
+// path to the provided subDirPath.
+//
+// Note not every external path provided may have a relative path mapped to the subDirPath.
+func ExternalPathsToSubDirRelPaths(
+	relativeRootPath string,
+	subDirPath string,
+	externalDirOrFilePaths []string,
+) (map[string]string, error) {
 	// We first need to reformat the externalDirOrFilePaths so that they accommodate
 	// for the relativeRootPath (the path to the directory containing the buf.work.yaml).
 	//
@@ -201,7 +236,11 @@ func BuildOptionsForWorkspaceDirectory(
 	//
 	// Alternatively, we could special-case this logic so that we only work with relative paths when we have an ArchiveRef
 	// or GitRef, but this would violate the abstraction boundary for buffetch.
-	absExternalDirOrFilePaths := make([]string, 0, len(externalDirOrFilePaths))
+	externalToAbsExternalDirOrFilePaths := make(map[string]string)
+	// We know that if the file is actually buf.work for legacy reasons, this will be wrong,
+	// but we accept that as this shouldn't happen often anymore and this is just
+	// used for error messages.
+	workspaceID := filepath.Join(normalpath.Unnormalize(relativeRootPath), ExternalConfigV1FilePath)
 	for _, externalDirOrFilePath := range externalDirOrFilePaths {
 		absExternalDirOrFilePath, err := normalpath.NormalizeAndAbsolute(externalDirOrFilePath)
 		if err != nil {
@@ -210,18 +249,18 @@ func BuildOptionsForWorkspaceDirectory(
 				normalpath.Unnormalize(externalDirOrFilePath),
 			)
 		}
-		absExternalDirOrFilePaths = append(absExternalDirOrFilePaths, absExternalDirOrFilePath)
+		externalToAbsExternalDirOrFilePaths[externalDirOrFilePath] = absExternalDirOrFilePath
 	}
 	absRelativeRootPath, err := normalpath.NormalizeAndAbsolute(relativeRootPath)
 	if err != nil {
 		return nil, err
 	}
-	relativeRootRelPaths := make([]string, 0, len(absExternalDirOrFilePaths))
-	for i, absExternalDirOrFilePath := range absExternalDirOrFilePaths {
+	externalToRelativeRootRelPaths := make(map[string]string)
+	for externalDirOrFilePath, absExternalDirOrFilePath := range externalToAbsExternalDirOrFilePaths {
 		if absRelativeRootPath == absExternalDirOrFilePath {
 			return nil, fmt.Errorf(
 				`path "%s" is equal to the workspace defined in "%s"`,
-				normalpath.Unnormalize(externalDirOrFilePaths[i]),
+				normalpath.Unnormalize(externalDirOrFilePath),
 				workspaceID,
 			)
 		}
@@ -230,11 +269,11 @@ func BuildOptionsForWorkspaceDirectory(
 			if err != nil {
 				return nil, fmt.Errorf(
 					`a relative path could not be resolved between "%s" and "%s"`,
-					normalpath.Unnormalize(externalDirOrFilePaths[i]),
+					normalpath.Unnormalize(externalDirOrFilePath),
 					workspaceID,
 				)
 			}
-			relativeRootRelPaths = append(relativeRootRelPaths, relativeRootRelPath)
+			externalToRelativeRootRelPaths[externalDirOrFilePath] = relativeRootRelPath
 		}
 	}
 	// Now that the paths are relative to the relativeRootPath, the paths need to be scoped to
@@ -252,12 +291,12 @@ func BuildOptionsForWorkspaceDirectory(
 	//
 	// The 'proto' directory will receive the ./proto/buf/... files as ./buf/... whereas the
 	// 'enterprise/proto' directory will have no matching paths.
-	subDirRelPaths := make([]string, 0, len(relativeRootRelPaths))
-	for i, relativeRootRelPath := range relativeRootRelPaths {
+	externalToSubDirRelPaths := make(map[string]string)
+	for externalDirOrFilePath, relativeRootRelPath := range externalToRelativeRootRelPaths {
 		if subDirPath == relativeRootRelPath {
 			return nil, fmt.Errorf(
 				`path "%s" is equal to workspace directory "%s" defined in "%s"`,
-				normalpath.Unnormalize(externalDirOrFilePaths[i]),
+				normalpath.Unnormalize(externalDirOrFilePath),
 				normalpath.Unnormalize(subDirPath),
 				workspaceID,
 			)
@@ -267,22 +306,14 @@ func BuildOptionsForWorkspaceDirectory(
 			if err != nil {
 				return nil, fmt.Errorf(
 					`a relative path could not be resolved between "%s" and "%s"`,
-					normalpath.Unnormalize(externalDirOrFilePaths[i]),
+					normalpath.Unnormalize(externalDirOrFilePath),
 					subDirPath,
 				)
 			}
-			subDirRelPaths = append(subDirRelPaths, subDirRelPath)
+			externalToSubDirRelPaths[externalDirOrFilePath] = subDirRelPath
 		}
 	}
-	// Note that subDirRelPaths can be empty. If so, this represents
-	// the case where externalDirOrFilePaths were provided, but none
-	// matched.
-	if externalDirOrFilePathsAllowNotExist {
-		buildOptions = append(buildOptions, bufmodulebuild.WithPathsAllowNotExist(subDirRelPaths))
-	} else {
-		buildOptions = append(buildOptions, bufmodulebuild.WithPaths(subDirRelPaths))
-	}
-	return buildOptions, nil
+	return externalToSubDirRelPaths, nil
 }
 
 // Config is the workspace config.
@@ -291,21 +322,18 @@ type Config struct {
 	Directories []string
 }
 
-// Provider provides workspace configurations.
-type Provider interface {
-	// GetConfig gets the Config for the YAML data at ConfigFilePath.
-	//
-	// If the data is of length 0, returns the default config.
-	GetConfig(ctx context.Context, readBucket storage.ReadBucket, relativeRootPath string) (*Config, error)
-	// GetConfig gets the Config for the given JSON or YAML data.
-	//
-	// If the data is of length 0, returns the default config.
-	GetConfigForData(ctx context.Context, data []byte) (*Config, error)
+// GetConfigForBucket gets the Config for the YAML data at ConfigFilePath.
+//
+// If the data is of length 0, returns the default config.
+func GetConfigForBucket(ctx context.Context, readBucket storage.ReadBucket, relativeRootPath string) (*Config, error) {
+	return getConfigForBucket(ctx, readBucket, relativeRootPath)
 }
 
-// NewProvider returns a new Provider.
-func NewProvider(logger *zap.Logger) Provider {
-	return newProvider(logger)
+// GetConfigForData gets the Config for the given JSON or YAML data.
+//
+// If the data is of length 0, returns the default config.
+func GetConfigForData(ctx context.Context, data []byte) (*Config, error) {
+	return getConfigForData(ctx, data)
 }
 
 // ExistingConfigFilePath checks if a configuration file exists, and if so, returns the path

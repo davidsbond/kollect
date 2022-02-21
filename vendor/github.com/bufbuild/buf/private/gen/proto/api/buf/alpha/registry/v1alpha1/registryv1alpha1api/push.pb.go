@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,5 +32,6 @@ type PushService interface {
 		branch string,
 		module *v1alpha1.Module,
 		tags []string,
+		tracks []string,
 	) (localModulePin *v1alpha11.LocalModulePin, err error)
 }

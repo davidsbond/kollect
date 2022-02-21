@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bufbuild/buf/private/buf/bufconfig"
 	"github.com/bufbuild/buf/private/buf/buffetch"
-	"github.com/bufbuild/buf/private/buf/bufwork"
 	"github.com/bufbuild/buf/private/bufpkg/bufanalysis"
+	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufimage"
 	"github.com/bufbuild/buf/private/bufpkg/bufimage/bufimagebuild"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulebuild"
@@ -36,7 +36,6 @@ type imageConfigReader struct {
 	logger               *zap.Logger
 	storageosProvider    storageos.Provider
 	fetchReader          buffetch.Reader
-	configProvider       bufconfig.Provider
 	moduleBucketBuilder  bufmodulebuild.ModuleBucketBuilder
 	moduleFileSetBuilder bufmodulebuild.ModuleFileSetBuilder
 	imageBuilder         bufimagebuild.Builder
@@ -48,8 +47,6 @@ func newImageConfigReader(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
 	fetchReader buffetch.Reader,
-	configProvider bufconfig.Provider,
-	workspaceConfigProvider bufwork.Provider,
 	moduleBucketBuilder bufmodulebuild.ModuleBucketBuilder,
 	moduleFileSetBuilder bufmodulebuild.ModuleFileSetBuilder,
 	imageBuilder bufimagebuild.Builder,
@@ -58,7 +55,6 @@ func newImageConfigReader(
 		logger:               logger.Named("bufwire"),
 		storageosProvider:    storageosProvider,
 		fetchReader:          fetchReader,
-		configProvider:       configProvider,
 		moduleBucketBuilder:  moduleBucketBuilder,
 		moduleFileSetBuilder: moduleFileSetBuilder,
 		imageBuilder:         imageBuilder,
@@ -66,8 +62,6 @@ func newImageConfigReader(
 			logger,
 			storageosProvider,
 			fetchReader,
-			configProvider,
-			workspaceConfigProvider,
 			moduleBucketBuilder,
 		),
 		imageReader: newImageReader(
@@ -83,6 +77,7 @@ func (i *imageConfigReader) GetImageConfigs(
 	ref buffetch.Ref,
 	configOverride string,
 	externalDirOrFilePaths []string,
+	externalExcludeDirOrFilePaths []string,
 	externalDirOrFilePathsAllowNotExist bool,
 	excludeSourceCodeInfo bool,
 ) ([]ImageConfig, []bufanalysis.FileAnnotation, error) {
@@ -94,6 +89,7 @@ func (i *imageConfigReader) GetImageConfigs(
 			t,
 			configOverride,
 			externalDirOrFilePaths,
+			externalExcludeDirOrFilePaths,
 			externalDirOrFilePathsAllowNotExist,
 			excludeSourceCodeInfo,
 		)
@@ -105,6 +101,7 @@ func (i *imageConfigReader) GetImageConfigs(
 			t,
 			configOverride,
 			externalDirOrFilePaths,
+			externalExcludeDirOrFilePaths,
 			externalDirOrFilePathsAllowNotExist,
 			excludeSourceCodeInfo,
 		)
@@ -115,6 +112,7 @@ func (i *imageConfigReader) GetImageConfigs(
 			t,
 			configOverride,
 			externalDirOrFilePaths,
+			externalExcludeDirOrFilePaths,
 			externalDirOrFilePathsAllowNotExist,
 			excludeSourceCodeInfo,
 		)
@@ -129,6 +127,7 @@ func (i *imageConfigReader) getSourceOrModuleImageConfigs(
 	sourceOrModuleRef buffetch.SourceOrModuleRef,
 	configOverride string,
 	externalDirOrFilePaths []string,
+	externalExcludeDirOrFilePaths []string,
 	externalDirOrFilePathsAllowNotExist bool,
 	excludeSourceCodeInfo bool,
 ) ([]ImageConfig, []bufanalysis.FileAnnotation, error) {
@@ -138,6 +137,7 @@ func (i *imageConfigReader) getSourceOrModuleImageConfigs(
 		sourceOrModuleRef,
 		configOverride,
 		externalDirOrFilePaths,
+		externalExcludeDirOrFilePaths,
 		externalDirOrFilePathsAllowNotExist,
 	)
 	if err != nil {
@@ -185,6 +185,12 @@ func (i *imageConfigReader) getSourceOrModuleImageConfigs(
 	if len(imageConfigs) == 0 {
 		return nil, nil, errors.New("no .proto target files found")
 	}
+	if protoFileRef, ok := sourceOrModuleRef.(buffetch.ProtoFileRef); ok {
+		imageConfigs, err = filterImageConfigs(imageConfigs, protoFileRef)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	return imageConfigs, nil, nil
 }
 
@@ -194,6 +200,7 @@ func (i *imageConfigReader) getImageImageConfig(
 	imageRef buffetch.ImageRef,
 	configOverride string,
 	externalDirOrFilePaths []string,
+	externalExcludeDirOrFilePaths []string,
 	externalDirOrFilePathsAllowNotExist bool,
 	excludeSourceCodeInfo bool,
 ) (_ ImageConfig, retErr error) {
@@ -202,6 +209,7 @@ func (i *imageConfigReader) getImageImageConfig(
 		container,
 		imageRef,
 		externalDirOrFilePaths,
+		externalExcludeDirOrFilePaths,
 		externalDirOrFilePathsAllowNotExist,
 		excludeSourceCodeInfo,
 	)
@@ -215,11 +223,10 @@ func (i *imageConfigReader) getImageImageConfig(
 	if err != nil {
 		return nil, err
 	}
-	config, err := bufconfig.ReadConfig(
+	config, err := bufconfig.ReadConfigOS(
 		ctx,
-		i.configProvider,
 		readWriteBucket,
-		bufconfig.ReadConfigWithOverride(configOverride),
+		bufconfig.ReadConfigOSWithOverride(configOverride),
 	)
 	if err != nil {
 		return nil, err
@@ -251,4 +258,52 @@ func (i *imageConfigReader) buildModule(
 		return nil, fileAnnotations, nil
 	}
 	return newImageConfig(image, config), nil, nil
+}
+
+// filterImageConfigs takes in image configs and filters them based on the proto file ref.
+// First, we get the package, path, and config for the file ref. And then we merge the images
+// across the ImageConfigs, then filter them based on the paths for the package.
+//
+// The image merge is needed because if the `include_package_files=true` option is set, we
+// need to gather all the files for the package, including files spread out across workspace
+// directories, which would result in multiple image configs.
+func filterImageConfigs(imageConfigs []ImageConfig, protoFileRef buffetch.ProtoFileRef) ([]ImageConfig, error) {
+	var pkg string
+	var path string
+	var config *bufconfig.Config
+	var images []bufimage.Image
+	for _, imageConfig := range imageConfigs {
+		for _, imageFile := range imageConfig.Image().Files() {
+			// TODO: Ideally, we have the path returned from PathForExternalPath, however for a protoFileRef,
+			// PathForExternalPath returns only ".", <nil> when matched on the exact path of the proto file
+			// provided as the ref. This is expected since `PathForExternalPath` is meant to return the relative
+			// path based on the reference, which in this case will always be a specific file.
+			if _, err := protoFileRef.PathForExternalPath(imageFile.ExternalPath()); err == nil {
+				pkg = imageFile.Proto().GetPackage()
+				path = imageFile.Path()
+				config = imageConfig.Config()
+				break
+			}
+		}
+		images = append(images, imageConfig.Image())
+	}
+	image, err := bufimage.MergeImages(images...)
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	if protoFileRef.IncludePackageFiles() {
+		for _, imageFile := range image.Files() {
+			if imageFile.Proto().GetPackage() == pkg {
+				paths = append(paths, imageFile.Path())
+			}
+		}
+	} else {
+		paths = []string{path}
+	}
+	prunedImage, err := bufimage.ImageWithOnlyPaths(image, paths, nil)
+	if err != nil {
+		return nil, err
+	}
+	return []ImageConfig{newImageConfig(prunedImage, config)}, nil
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ func (s *organizationService) ListUserOrganizations(
 	pageSize uint32,
 	pageToken string,
 	reverse bool,
-) (organizations []*v1alpha1.Organization, nextPageToken string, _ error) {
+) (organizations []*v1alpha1.OrganizationMembership, nextPageToken string, _ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
 	}
@@ -121,50 +121,6 @@ func (s *organizationService) CreateOrganization(ctx context.Context, name strin
 		ctx,
 		&v1alpha1.CreateOrganizationRequest{
 			Name: name,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return response.Organization, nil
-}
-
-// UpdateOrganizationName updates a organization's name.
-func (s *organizationService) UpdateOrganizationName(
-	ctx context.Context,
-	id string,
-	newName string,
-) (organization *v1alpha1.Organization, _ error) {
-	if s.contextModifier != nil {
-		ctx = s.contextModifier(ctx)
-	}
-	response, err := s.client.UpdateOrganizationName(
-		ctx,
-		&v1alpha1.UpdateOrganizationNameRequest{
-			Id:      id,
-			NewName: newName,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return response.Organization, nil
-}
-
-// UpdateOrganizationNameByName updates a organization's name by name.
-func (s *organizationService) UpdateOrganizationNameByName(
-	ctx context.Context,
-	name string,
-	newName string,
-) (organization *v1alpha1.Organization, _ error) {
-	if s.contextModifier != nil {
-		ctx = s.contextModifier(ctx)
-	}
-	response, err := s.client.UpdateOrganizationNameByName(
-		ctx,
-		&v1alpha1.UpdateOrganizationNameByNameRequest{
-			Name:    name,
-			NewName: newName,
 		},
 	)
 	if err != nil {
@@ -207,20 +163,22 @@ func (s *organizationService) DeleteOrganizationByName(ctx context.Context, name
 	return nil
 }
 
-// AddOrganizationBaseRepositoryScope adds a base repository scope to an organization by ID.
-func (s *organizationService) AddOrganizationBaseRepositoryScope(
+// AddOrganizationMember add a role to an user in the organization.
+func (s *organizationService) AddOrganizationMember(
 	ctx context.Context,
-	id string,
-	repositoryScope v1alpha1.RepositoryScope,
+	organizationId string,
+	userId string,
+	organizationRole v1alpha1.OrganizationRole,
 ) (_ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
 	}
-	_, err := s.client.AddOrganizationBaseRepositoryScope(
+	_, err := s.client.AddOrganizationMember(
 		ctx,
-		&v1alpha1.AddOrganizationBaseRepositoryScopeRequest{
-			Id:              id,
-			RepositoryScope: repositoryScope,
+		&v1alpha1.AddOrganizationMemberRequest{
+			OrganizationId:   organizationId,
+			UserId:           userId,
+			OrganizationRole: organizationRole,
 		},
 	)
 	if err != nil {
@@ -229,20 +187,22 @@ func (s *organizationService) AddOrganizationBaseRepositoryScope(
 	return nil
 }
 
-// AddOrganizationBaseRepositoryScopeByName adds a base repository scope to an organization by name.
-func (s *organizationService) AddOrganizationBaseRepositoryScopeByName(
+// UpdateOrganizationMember update the user's membership information in the organization.
+func (s *organizationService) UpdateOrganizationMember(
 	ctx context.Context,
-	name string,
-	repositoryScope v1alpha1.RepositoryScope,
+	organizationId string,
+	userId string,
+	organizationRole v1alpha1.OrganizationRole,
 ) (_ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
 	}
-	_, err := s.client.AddOrganizationBaseRepositoryScopeByName(
+	_, err := s.client.UpdateOrganizationMember(
 		ctx,
-		&v1alpha1.AddOrganizationBaseRepositoryScopeByNameRequest{
-			Name:            name,
-			RepositoryScope: repositoryScope,
+		&v1alpha1.UpdateOrganizationMemberRequest{
+			OrganizationId:   organizationId,
+			UserId:           userId,
+			OrganizationRole: organizationRole,
 		},
 	)
 	if err != nil {
@@ -251,20 +211,20 @@ func (s *organizationService) AddOrganizationBaseRepositoryScopeByName(
 	return nil
 }
 
-// RemoveOrganizationBaseRepositoryScope removes a base repository scope from an organization by ID.
-func (s *organizationService) RemoveOrganizationBaseRepositoryScope(
+// RemoveOrganizationMember remove the role of an user in the organization.
+func (s *organizationService) RemoveOrganizationMember(
 	ctx context.Context,
-	id string,
-	repositoryScope v1alpha1.RepositoryScope,
+	organizationId string,
+	userId string,
 ) (_ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
 	}
-	_, err := s.client.RemoveOrganizationBaseRepositoryScope(
+	_, err := s.client.RemoveOrganizationMember(
 		ctx,
-		&v1alpha1.RemoveOrganizationBaseRepositoryScopeRequest{
-			Id:              id,
-			RepositoryScope: repositoryScope,
+		&v1alpha1.RemoveOrganizationMemberRequest{
+			OrganizationId: organizationId,
+			UserId:         userId,
 		},
 	)
 	if err != nil {
@@ -273,20 +233,68 @@ func (s *organizationService) RemoveOrganizationBaseRepositoryScope(
 	return nil
 }
 
-// RemoveOrganizationBaseRepositoryScopeByName removes a base repository scope from an organization by name.
-func (s *organizationService) RemoveOrganizationBaseRepositoryScopeByName(
+// SetOrganizationMember sets the role of a user in the organization.
+func (s *organizationService) SetOrganizationMember(
 	ctx context.Context,
-	name string,
-	repositoryScope v1alpha1.RepositoryScope,
+	organizationId string,
+	userId string,
+	organizationRole v1alpha1.OrganizationRole,
 ) (_ error) {
 	if s.contextModifier != nil {
 		ctx = s.contextModifier(ctx)
 	}
-	_, err := s.client.RemoveOrganizationBaseRepositoryScopeByName(
+	_, err := s.client.SetOrganizationMember(
 		ctx,
-		&v1alpha1.RemoveOrganizationBaseRepositoryScopeByNameRequest{
-			Name:            name,
-			RepositoryScope: repositoryScope,
+		&v1alpha1.SetOrganizationMemberRequest{
+			OrganizationId:   organizationId,
+			UserId:           userId,
+			OrganizationRole: organizationRole,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetOrganizationSettings gets the settings of an organization, including organization base roles.
+func (s *organizationService) GetOrganizationSettings(
+	ctx context.Context,
+	organizationId string,
+) (repositoryBaseRole v1alpha1.RepositoryRole, pluginBaseRole v1alpha1.PluginRole, templateBaseRole v1alpha1.TemplateRole, membersCount uint32, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.GetOrganizationSettings(
+		ctx,
+		&v1alpha1.GetOrganizationSettingsRequest{
+			OrganizationId: organizationId,
+		},
+	)
+	if err != nil {
+		return v1alpha1.RepositoryRole(0), v1alpha1.PluginRole(0), v1alpha1.TemplateRole(0), 0, err
+	}
+	return response.RepositoryBaseRole, response.PluginBaseRole, response.TemplateBaseRole, response.MembersCount, nil
+}
+
+// UpdateOrganizationSettings update the organization settings including base roles.
+func (s *organizationService) UpdateOrganizationSettings(
+	ctx context.Context,
+	organizationId string,
+	repositoryBaseRole v1alpha1.RepositoryRole,
+	pluginBaseRole v1alpha1.PluginRole,
+	templateBaseRole v1alpha1.TemplateRole,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.UpdateOrganizationSettings(
+		ctx,
+		&v1alpha1.UpdateOrganizationSettingsRequest{
+			OrganizationId:     organizationId,
+			RepositoryBaseRole: repositoryBaseRole,
+			PluginBaseRole:     pluginBaseRole,
+			TemplateBaseRole:   templateBaseRole,
 		},
 	)
 	if err != nil {

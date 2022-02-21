@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,44 +17,44 @@ package modupdate
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/bufbuild/buf/private/buf/bufcli"
-	"github.com/bufbuild/buf/private/buf/bufconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
 	"github.com/bufbuild/buf/private/bufpkg/buflock"
-	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/bufpkg/bufrpc"
+	"github.com/bufbuild/buf/private/gen/proto/api/buf/alpha/registry/v1alpha1/registryv1alpha1api"
 	modulev1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/module/v1alpha1"
+	registryv1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
 	"github.com/bufbuild/buf/private/pkg/rpc"
+	"github.com/bufbuild/buf/private/pkg/storage"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 const (
-	dirFlagName  = "dir"
-	onlyFlagName = "only"
+	onlyFlagName   = "only"
+	bufTeamsRemote = "buf.team"
 )
 
 // NewCommand returns a new update Command.
 func NewCommand(
 	name string,
 	builder appflag.Builder,
-	deprecated string,
-	hidden bool,
 ) *appcmd.Command {
 	flags := newFlags()
 	return &appcmd.Command{
-		Use:   name,
-		Short: "Update the modules dependencies. Updates the " + buflock.ExternalConfigFilePath + " file.",
-		Long: "Gets the latest digests for the specified references in the config file, " +
-			"and writes them and their transitive dependencies to the " +
+		Use:   name + " <directory>",
+		Short: "Update a module's dependencies by updating the " + buflock.ExternalConfigFilePath + " file.",
+		Long: "Fetch the latest digests for the specified references in the config file, " +
+			"and write them and their transitive dependencies to the " +
 			buflock.ExternalConfigFilePath +
-			" file.",
-		Args:       cobra.NoArgs,
-		Deprecated: deprecated,
-		Hidden:     hidden,
+			` file. The first argument is the directory of the local module to update. Defaults to "." if no argument is specified.`,
+		Args: cobra.MaximumNArgs(1),
 		Run: builder.NewRunFunc(
 			func(ctx context.Context, container appflag.Container) error {
 				return run(ctx, container, flags)
@@ -66,9 +66,6 @@ func NewCommand(
 }
 
 type flags struct {
-	// for testing only
-	Dir string
-
 	Only []string
 }
 
@@ -81,15 +78,8 @@ func (f *flags) Bind(flagSet *pflag.FlagSet) {
 		&f.Only,
 		onlyFlagName,
 		nil,
-		"The name of a dependency to update. When used, only this dependency (and possibly its dependencies) will be updated. May be passed multiple times.",
+		"The name of the dependency to update. When set, only this dependency is updated (along with any of its sub-dependencies). May be passed multiple times.",
 	)
-	flagSet.StringVar(
-		&f.Dir,
-		dirFlagName,
-		".",
-		"The directory to operate in. For testing only.",
-	)
-	_ = flagSet.MarkHidden(dirFlagName)
 }
 
 // run update the buf.lock file for a specific module.
@@ -98,9 +88,13 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) error {
+	directoryInput, err := bufcli.GetInputValue(container, "", ".")
+	if err != nil {
+		return err
+	}
 	storageosProvider := storageos.NewProvider(storageos.ProviderWithSymlinks())
 	readWriteBucket, err := storageosProvider.NewReadWriteBucket(
-		flags.Dir,
+		directoryInput,
 		storageos.ReadWriteBucketWithSymlinksIfSupported(),
 	)
 	if err != nil {
@@ -113,7 +107,7 @@ func run(
 	if existingConfigFilePath == "" {
 		return bufcli.ErrNoConfigFile
 	}
-	moduleConfig, err := bufconfig.NewProvider(container.Logger()).GetConfig(ctx, readWriteBucket)
+	moduleConfig, err := bufconfig.GetConfigForBucket(ctx, readWriteBucket)
 	if err != nil {
 		return err
 	}
@@ -121,59 +115,158 @@ func run(
 	remote := bufrpc.DefaultRemote
 	if moduleConfig.ModuleIdentity != nil && moduleConfig.ModuleIdentity.Remote() != "" {
 		remote = moduleConfig.ModuleIdentity.Remote()
+	} else {
+		for _, moduleReference := range moduleConfig.Build.DependencyModuleReferences {
+			if strings.HasSuffix(moduleReference.Remote(), bufTeamsRemote) && !strings.HasSuffix(bufrpc.DefaultRemote, bufTeamsRemote) {
+				warnMsg := fmt.Sprintf(
+					`%q does not specify a "name", so Buf is defaulting to using remote %q for dependency resolution. This remote may be unable to resolve %q if it's an enterprise BSR module. Did you mean to specify a "name: %s/..." on this module?`,
+					existingConfigFilePath,
+					bufrpc.DefaultRemote,
+					moduleReference.IdentityString(),
+					moduleReference.Remote(),
+				)
+				container.Logger().Warn(warnMsg)
+				break
+			}
+		}
 	}
-	var dependencyModulePins []bufmodule.ModulePin
-	if len(moduleConfig.Build.DependencyModuleReferences) != 0 {
-		apiProvider, err := bufcli.NewRegistryProvider(ctx, container)
-		if err != nil {
-			return err
+
+	pinnedRepositories, err := getDependencies(
+		ctx,
+		container,
+		flags,
+		remote,
+		moduleConfig,
+		readWriteBucket,
+	)
+	if err != nil {
+		return err
+	}
+
+	dependencyModulePins := make([]bufmoduleref.ModulePin, len(pinnedRepositories))
+	for i := range pinnedRepositories {
+		dependencyModulePins[i] = pinnedRepositories[i].modulePin
+		modulePin := pinnedRepositories[i].modulePin
+		repository := pinnedRepositories[i].repository
+		if !repository.Deprecated {
+			continue
 		}
-		service, err := apiProvider.NewResolveService(ctx, remote)
-		if err != nil {
-			return err
-		}
-		var protoDependencyModuleReferences []*modulev1alpha1.ModuleReference
-		var currentProtoModulePins []*modulev1alpha1.ModulePin
-		if len(flags.Only) > 0 {
-			referencesByIdentity := map[string]bufmodule.ModuleReference{}
-			for _, reference := range moduleConfig.Build.DependencyModuleReferences {
-				referencesByIdentity[reference.IdentityString()] = reference
-			}
-			for _, only := range flags.Only {
-				moduleReference, ok := referencesByIdentity[only]
-				if !ok {
-					return fmt.Errorf("%q is not a valid --only input: no such dependency in current module deps", only)
-				}
-				protoDependencyModuleReferences = append(protoDependencyModuleReferences, bufmodule.NewProtoModuleReferenceForModuleReference(moduleReference))
-			}
-			currentModulePins, err := bufmodule.DependencyModulePinsForBucket(ctx, readWriteBucket)
-			if err != nil {
-				return fmt.Errorf("couldn't read current dependencies: %w", err)
-			}
-			currentProtoModulePins = bufmodule.NewProtoModulePinsForModulePins(currentModulePins...)
-		} else {
-			protoDependencyModuleReferences = bufmodule.NewProtoModuleReferencesForModuleReferences(
-				moduleConfig.Build.DependencyModuleReferences...,
-			)
-		}
-		protoDependencyModulePins, err := service.GetModulePins(
-			ctx,
-			protoDependencyModuleReferences,
-			currentProtoModulePins,
+		warnMsg := fmt.Sprintf(
+			`Repository "%s/%s/%s" is deprecated`,
+			modulePin.Remote(),
+			modulePin.Owner(),
+			modulePin.Repository(),
 		)
-		if err != nil {
-			if rpc.GetErrorCode(err) == rpc.ErrorCodeUnimplemented && remote != bufrpc.DefaultRemote {
-				return bufcli.NewUnimplementedRemoteError(err, remote, moduleConfig.ModuleIdentity.IdentityString())
-			}
-			return err
+		if repository.DeprecationMessage != "" {
+			warnMsg = fmt.Sprintf("%s: %s", warnMsg, repository.DeprecationMessage)
 		}
-		dependencyModulePins, err = bufmodule.NewModulePinsForProtos(protoDependencyModulePins...)
-		if err != nil {
-			return bufcli.NewInternalError(err)
-		}
+		container.Logger().Warn(warnMsg)
 	}
-	if err := bufmodule.PutDependencyModulePinsToBucket(ctx, readWriteBucket, dependencyModulePins); err != nil {
+
+	if err := bufmoduleref.PutDependencyModulePinsToBucket(ctx, readWriteBucket, dependencyModulePins); err != nil {
 		return bufcli.NewInternalError(err)
 	}
 	return nil
+}
+
+func getDependencies(
+	ctx context.Context,
+	container appflag.Container,
+	flags *flags,
+	remote string,
+	moduleConfig *bufconfig.Config,
+	readWriteBucket storage.ReadWriteBucket,
+) ([]*pinnedRepository, error) {
+	if len(moduleConfig.Build.DependencyModuleReferences) == 0 {
+		return nil, nil
+	}
+	apiProvider, err := bufcli.NewRegistryProvider(ctx, container)
+	if err != nil {
+		return nil, err
+	}
+	service, err := apiProvider.NewResolveService(ctx, remote)
+	if err != nil {
+		return nil, err
+	}
+	var protoDependencyModuleReferences []*modulev1alpha1.ModuleReference
+	var currentProtoModulePins []*modulev1alpha1.ModulePin
+	if len(flags.Only) > 0 {
+		referencesByIdentity := map[string]bufmoduleref.ModuleReference{}
+		for _, reference := range moduleConfig.Build.DependencyModuleReferences {
+			referencesByIdentity[reference.IdentityString()] = reference
+		}
+		for _, only := range flags.Only {
+			moduleReference, ok := referencesByIdentity[only]
+			if !ok {
+				return nil, fmt.Errorf("%q is not a valid --only input: no such dependency in current module deps", only)
+			}
+			protoDependencyModuleReferences = append(protoDependencyModuleReferences, bufmoduleref.NewProtoModuleReferenceForModuleReference(moduleReference))
+		}
+		currentModulePins, err := bufmoduleref.DependencyModulePinsForBucket(ctx, readWriteBucket)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't read current dependencies: %w", err)
+		}
+		currentProtoModulePins = bufmoduleref.NewProtoModulePinsForModulePins(currentModulePins...)
+	} else {
+		protoDependencyModuleReferences = bufmoduleref.NewProtoModuleReferencesForModuleReferences(
+			moduleConfig.Build.DependencyModuleReferences...,
+		)
+	}
+	protoDependencyModulePins, err := service.GetModulePins(
+		ctx,
+		protoDependencyModuleReferences,
+		currentProtoModulePins,
+	)
+	if err != nil {
+		if rpc.GetErrorCode(err) == rpc.ErrorCodeUnimplemented && remote != bufrpc.DefaultRemote {
+			return nil, bufcli.NewUnimplementedRemoteError(err, remote, moduleConfig.ModuleIdentity.IdentityString())
+		}
+		return nil, err
+	}
+	dependencyModulePins, err := bufmoduleref.NewModulePinsForProtos(protoDependencyModulePins...)
+	if err != nil {
+		return nil, bufcli.NewInternalError(err)
+	}
+	// We want to create one repository service per relevant remote.
+	remoteToRepositoryService := make(map[string]registryv1alpha1api.RepositoryService)
+	remoteToDependencyModulePins := make(map[string][]bufmoduleref.ModulePin)
+	for _, pin := range dependencyModulePins {
+		if _, ok := remoteToRepositoryService[pin.Remote()]; !ok {
+			repositoryService, err := apiProvider.NewRepositoryService(ctx, pin.Remote())
+			if err != nil {
+				return nil, err
+			}
+			remoteToRepositoryService[pin.Remote()] = repositoryService
+		}
+		remoteToDependencyModulePins[pin.Remote()] = append(remoteToDependencyModulePins[pin.Remote()], pin)
+	}
+	var allPinnedRepositories []*pinnedRepository
+	for dependencyRemote, dependencyModulePins := range remoteToDependencyModulePins {
+		repositoryService, ok := remoteToRepositoryService[dependencyRemote]
+		if !ok {
+			return nil, fmt.Errorf("a repository service is not available for %s", dependencyRemote)
+		}
+		dependencyFullNames := make([]string, len(dependencyModulePins))
+		for i, pin := range dependencyModulePins {
+			dependencyFullNames[i] = fmt.Sprintf("%s/%s", pin.Owner(), pin.Repository())
+		}
+		dependencyRepos, err := repositoryService.GetRepositoriesByFullName(ctx, dependencyFullNames)
+		if err != nil {
+			return nil, err
+		}
+		pinnedRepositories := make([]*pinnedRepository, len(dependencyModulePins))
+		for i, modulePin := range dependencyModulePins {
+			pinnedRepositories[i] = &pinnedRepository{
+				modulePin:  modulePin,
+				repository: dependencyRepos[i],
+			}
+		}
+		allPinnedRepositories = append(allPinnedRepositories, pinnedRepositories...)
+	}
+	return allPinnedRepositories, nil
+}
+
+type pinnedRepository struct {
+	modulePin  bufmoduleref.ModulePin
+	repository *registryv1alpha1.Repository
 }

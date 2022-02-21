@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	imagev1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/image/v1"
 	"github.com/bufbuild/buf/private/pkg/normalpath"
 	"github.com/bufbuild/buf/private/pkg/protodescriptor"
@@ -28,7 +28,7 @@ import (
 
 // ImageFile is a Protobuf file within an image.
 type ImageFile interface {
-	bufmodule.FileInfo
+	bufmoduleref.FileInfo
 	// Proto is the backing *descriptorpb.FileDescriptorProto for this File.
 	//
 	// FileDescriptor should be preferred to Proto. We keep this method around
@@ -62,7 +62,7 @@ type ImageFile interface {
 // TODO: moduleIdentity and commit should be options since they are optional.
 func NewImageFile(
 	fileDescriptor protodescriptor.FileDescriptor,
-	moduleIdentity bufmodule.ModuleIdentity,
+	moduleIdentity bufmoduleref.ModuleIdentity,
 	commit string,
 	externalPath string,
 	isImport bool,
@@ -138,12 +138,14 @@ func MergeImages(images ...Image) (Image, error) {
 	case 1:
 		return images[0], nil
 	default:
+		var paths []string
 		imageFileSet := make(map[string]ImageFile)
 		for _, image := range images {
 			for _, currentImageFile := range image.Files() {
 				storedImageFile, ok := imageFileSet[currentImageFile.Path()]
 				if !ok {
 					imageFileSet[currentImageFile.Path()] = currentImageFile
+					paths = append(paths, currentImageFile.Path())
 					continue
 				}
 				if !storedImageFile.IsImport() && !currentImageFile.IsImport() {
@@ -154,9 +156,12 @@ func MergeImages(images ...Image) (Image, error) {
 				}
 			}
 		}
+		// We need to preserve order for deterministic results, so we add
+		// the files in the order they're given, but base our selection
+		// on the imageFileSet.
 		imageFiles := make([]ImageFile, 0, len(imageFileSet))
-		for _, imageFile := range imageFileSet {
-			imageFiles = append(imageFiles, imageFile)
+		for _, path := range paths {
+			imageFiles = append(imageFiles, imageFileSet[path] /* Guaranteed to exist */)
 		}
 		return newImage(imageFiles, true)
 	}
@@ -177,7 +182,7 @@ func NewImageForProto(protoImage *imagev1.Image) (Image, error) {
 		var isImport bool
 		var isSyntaxUnspecified bool
 		var unusedDependencyIndexes []int32
-		var moduleIdentity bufmodule.ModuleIdentity
+		var moduleIdentity bufmoduleref.ModuleIdentity
 		var commit string
 		var err error
 		if protoImageFileExtension := protoImageFile.GetBufExtension(); protoImageFileExtension != nil {
@@ -186,7 +191,7 @@ func NewImageForProto(protoImage *imagev1.Image) (Image, error) {
 			unusedDependencyIndexes = protoImageFileExtension.GetUnusedDependency()
 			if protoModuleInfo := protoImageFileExtension.GetModuleInfo(); protoModuleInfo != nil {
 				if protoModuleName := protoModuleInfo.GetName(); protoModuleName != nil {
-					moduleIdentity, err = bufmodule.NewModuleIdentity(
+					moduleIdentity, err = bufmoduleref.NewModuleIdentity(
 						protoModuleName.GetRemote(),
 						protoModuleName.GetOwner(),
 						protoModuleName.GetRepository(),
@@ -241,6 +246,7 @@ func NewImageForCodeGeneratorRequest(request *pluginpb.CodeGeneratorRequest) (Im
 	return ImageWithOnlyPaths(
 		image,
 		request.GetFileToGenerate(),
+		nil,
 	)
 }
 
@@ -268,8 +274,9 @@ func ImageWithoutImports(image Image) Image {
 func ImageWithOnlyPaths(
 	image Image,
 	paths []string,
+	excludePaths []string,
 ) (Image, error) {
-	return imageWithOnlyPaths(image, paths, false)
+	return imageWithOnlyPaths(image, paths, excludePaths, false)
 }
 
 // ImageWithOnlyPathsAllowNotExist returns a copy of the Image that only includes the files
@@ -282,8 +289,9 @@ func ImageWithOnlyPaths(
 func ImageWithOnlyPathsAllowNotExist(
 	image Image,
 	paths []string,
+	excludePaths []string,
 ) (Image, error) {
-	return imageWithOnlyPaths(image, paths, true)
+	return imageWithOnlyPaths(image, paths, excludePaths, true)
 }
 
 // ImageByDir returns multiple images that have non-imports split
@@ -314,7 +322,7 @@ func ImageByDir(image Image) ([]Image, error) {
 			// this should never happen
 			return nil, fmt.Errorf("no dir for %q in dirToPaths", dir)
 		}
-		newImage, err := ImageWithOnlyPaths(image, paths)
+		newImage, err := ImageWithOnlyPaths(image, paths, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -354,17 +362,21 @@ func ImageToFileDescriptorProtos(image Image) []*descriptorpb.FileDescriptorProt
 //
 // All non-imports are added as files to generate.
 // If includeImports is set, all non-well-known-type imports are also added as files to generate.
+// If includeWellKnownTypes is set, well-known-type imports are also added as files to generate.
+// includeWellKnownTypes has no effect if includeImports is not set.
 func ImageToCodeGeneratorRequest(
 	image Image,
 	parameter string,
 	compilerVersion *pluginpb.Version,
 	includeImports bool,
+	includeWellKnownTypes bool,
 ) *pluginpb.CodeGeneratorRequest {
 	return imageToCodeGeneratorRequest(
 		image,
 		parameter,
 		compilerVersion,
 		includeImports,
+		includeWellKnownTypes,
 		nil,
 		nil,
 	)
@@ -375,17 +387,37 @@ func ImageToCodeGeneratorRequest(
 // All non-imports are added as files to generate.
 // If includeImports is set, all non-well-known-type imports are also added as files to generate.
 // If includeImports is set, only one CodeGeneratorRequest will contain any given file as a FileToGenerate.
+// If includeWellKnownTypes is set, well-known-type imports are also added as files to generate.
+// includeWellKnownTypes has no effect if includeImports is not set.
 func ImagesToCodeGeneratorRequests(
 	images []Image,
 	parameter string,
 	compilerVersion *pluginpb.Version,
 	includeImports bool,
+	includeWellKnownTypes bool,
 ) []*pluginpb.CodeGeneratorRequest {
 	requests := make([]*pluginpb.CodeGeneratorRequest, len(images))
-	// we don't need to track these if includeImports as false, so don't waste the time
+	// alreadyUsedPaths is a map of paths that have already been added to an image.
+	//
+	// We track this if includeImports is set, so that when we find an import, we can
+	// see if the import was already added to a CodeGeneratorRequest via another Image
+	// in the Image slice. If the import was already added, we do not add duplicates
+	// across CodeGeneratorRequests.
 	var alreadyUsedPaths map[string]struct{}
+	// nonImportPaths is a map of non-import paths.
+	//
+	// We track this if includeImports is set. If we find a non-import file in Image A
+	// and this file is an import in Image B, the file will have already been added to
+	// a CodeGeneratorRequest via Image A, so do not add the duplicate to any other
+	// CodeGeneratorRequest.
 	var nonImportPaths map[string]struct{}
 	if includeImports {
+		// We don't need to track these if includeImports is false, so we only populate
+		// the maps if includeImports is true. If includeImports is false, only non-imports
+		// will be added to each CodeGeneratorRequest, so figuring out whether or not
+		// we should add a given import to a given CodeGeneratorRequest is unnecessary.
+		//
+		// imageToCodeGeneratorRequest checks if these maps are nil before every access.
 		alreadyUsedPaths = make(map[string]struct{})
 		nonImportPaths = make(map[string]struct{})
 		for _, image := range images {
@@ -402,6 +434,7 @@ func ImagesToCodeGeneratorRequests(
 			parameter,
 			compilerVersion,
 			includeImports,
+			includeWellKnownTypes,
 			alreadyUsedPaths,
 			nonImportPaths,
 		)

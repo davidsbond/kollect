@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,14 @@ type DocService interface {
 		reference string,
 		path string,
 	) (content []byte, err error)
+	// GetModulePackages retrieves the list of packages for the module based on the given
+	// owner, repository, and reference.
+	GetModulePackages(
+		ctx context.Context,
+		owner string,
+		repository string,
+		reference string,
+	) (name string, modulePackages []*v1alpha1.ModulePackage, err error)
 	// GetModuleDocumentation retrieves the documentation for module based on the given
 	// owner, repository, and reference.
 	GetModuleDocumentation(

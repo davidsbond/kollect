@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,4 +77,19 @@ func Validate(s string) error {
 func ValidateDashless(dashless string) error {
 	_, err := FromDashless(dashless)
 	return err
+}
+
+// FromStringSlice returns a slice of uuids from the string slice.
+//
+// This only accepts uuids with dashes.
+func FromStringSlice(s []string) ([]uuid.UUID, error) {
+	var parsedUUIDS []uuid.UUID
+	for _, stringID := range s {
+		parsed, err := FromString(stringID)
+		if err != nil {
+			return nil, err
+		}
+		parsedUUIDS = append(parsedUUIDS, parsed)
+	}
+	return parsedUUIDS, nil
 }

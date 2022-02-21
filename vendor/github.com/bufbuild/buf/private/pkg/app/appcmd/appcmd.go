@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 
 	"github.com/bufbuild/buf/private/pkg/app"
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 	"github.com/spf13/pflag"
 )
 
@@ -60,11 +61,15 @@ type Command struct {
 	// Required if there are no sub-commands.
 	// Must be unset if there are sub-commands.
 	Run func(context.Context, app.Container) error
-	// Version is the version.
-	Version string
 	// SubCommands are the sub-commands. Optional.
 	// Must be unset if there is a run function.
 	SubCommands []*Command
+	// Version the version of the command.
+	//
+	// If this is specified, a flag --version will be added to the command
+	// that precedes all other functionality, and which prints the version
+	// to stdout.
+	Version string
 }
 
 // NewInvalidArgumentError creates a new invalidArgumentError, indicating that
@@ -124,33 +129,80 @@ func run(
 	// commands.
 	cobraCommand.CompletionOptions.DisableDefaultCmd = true
 
-	// If the root command is not the only command, add hidden bash-completion,
-	// fish-completion, and zsh-completion commands.
+	// If the root command is not the only command, add a hidden manpages command
+	// and a visible completion command.
 	if len(command.SubCommands) > 0 {
-		cobraCommand.AddCommand(&cobra.Command{
-			Use:    "bash-completion",
-			Args:   cobra.NoArgs,
-			Hidden: true,
-			Run: func(*cobra.Command, []string) {
-				runErr = cobraCommand.GenBashCompletion(container.Stdout())
+		shellCobraCommand, err := commandToCobra(
+			ctx,
+			container,
+			&Command{
+				Use:   "completion",
+				Short: "Generate auto-completion scripts for commonly used shells.",
+				SubCommands: []*Command{
+					{
+						Use:   "bash",
+						Short: "Generate auto-completion scripts for bash.",
+						Args:  cobra.NoArgs,
+						Run: func(ctx context.Context, container app.Container) error {
+							return cobraCommand.GenBashCompletion(container.Stdout())
+						},
+					},
+					{
+						Use:   "fish",
+						Short: "Generate auto-completion scripts for fish.",
+						Args:  cobra.NoArgs,
+						Run: func(ctx context.Context, container app.Container) error {
+							return cobraCommand.GenFishCompletion(container.Stdout(), true)
+						},
+					},
+					{
+						Use:   "powershell",
+						Short: "Generate auto-completion scripts for powershell.",
+						Args:  cobra.NoArgs,
+						Run: func(ctx context.Context, container app.Container) error {
+							return cobraCommand.GenPowerShellCompletion(container.Stdout())
+						},
+					},
+					{
+						Use:   "zsh",
+						Short: "Generate auto-completion scripts for zsh.",
+						Args:  cobra.NoArgs,
+						Run: func(ctx context.Context, container app.Container) error {
+							return cobraCommand.GenZshCompletion(container.Stdout())
+						},
+					},
+				},
 			},
-		})
-		cobraCommand.AddCommand(&cobra.Command{
-			Use:    "fish-completion",
-			Args:   cobra.NoArgs,
-			Hidden: true,
-			Run: func(*cobra.Command, []string) {
-				runErr = cobraCommand.GenFishCompletion(container.Stdout(), true)
+			&runErr,
+		)
+		if err != nil {
+			return err
+		}
+		cobraCommand.AddCommand(shellCobraCommand)
+		manpagesCobraCommand, err := commandToCobra(
+			ctx,
+			container,
+			&Command{
+				Use:    "manpages",
+				Args:   cobra.ExactArgs(1),
+				Hidden: true,
+				Run: func(ctx context.Context, container app.Container) error {
+					return doc.GenManTree(
+						cobraCommand,
+						&doc.GenManHeader{
+							Title:   "Buf",
+							Section: "1",
+						},
+						container.Arg(0),
+					)
+				},
 			},
-		})
-		cobraCommand.AddCommand(&cobra.Command{
-			Use:    "zsh-completion",
-			Args:   cobra.NoArgs,
-			Hidden: true,
-			Run: func(*cobra.Command, []string) {
-				runErr = cobraCommand.GenZshCompletion(container.Stdout())
-			},
-		})
+			&runErr,
+		)
+		if err != nil {
+			return err
+		}
+		cobraCommand.AddCommand(manpagesCobraCommand)
 	}
 
 	cobraCommand.SetOut(container.Stderr())
@@ -176,11 +228,15 @@ func run(
 	// Instead of all that, we can peek at the positionals and if the sub command starts with __complete
 	// we sets its output to stdout. This would mean that we cannot add a "real" sub-command that starts with
 	// __complete _and_ has its output set to stderr. This shouldn't ever be a problem.
+	//
+	// SetOut sets the output location for usage, help, and version messages by default.
 	if len(args) > 0 && strings.HasPrefix(args[0], "__complete") {
 		cobraCommand.SetOut(container.Stdout())
 	}
 	cobraCommand.SetArgs(args)
+	// SetErr sets the output location for error messages.
 	cobraCommand.SetErr(container.Stderr())
+	cobraCommand.SetIn(container.Stdin())
 
 	if err := cobraCommand.Execute(); err != nil {
 		return err
@@ -205,6 +261,13 @@ func commandToCobra(
 		Hidden:     command.Hidden,
 		Short:      strings.TrimSpace(command.Short),
 	}
+	cobraCommand.SetHelpFunc(
+		func(c *cobra.Command, _ []string) {
+			if err := tmpl(container.Stdout(), c.HelpTemplate(), c); err != nil {
+				c.PrintErrln(err)
+			}
+		},
+	)
 	if command.Long != "" {
 		cobraCommand.Long = cobraCommand.Short + "\n\n" + strings.TrimSpace(command.Long)
 	}
@@ -223,7 +286,7 @@ func commandToCobra(
 	if command.Run != nil {
 		cobraCommand.Run = func(_ *cobra.Command, args []string) {
 			runErr := command.Run(ctx, app.NewContainerForArgs(container, args...))
-			if errors.Is(runErr, &invalidArgumentError{}) {
+			if asErr := (&invalidArgumentError{}); errors.As(runErr, &asErr) {
 				// Print usage for failing command if an args error is returned.
 				// This has to be done at this level since the usage must relate
 				// to the command executed.
@@ -251,8 +314,22 @@ func commandToCobra(
 		}
 	}
 	if command.Version != "" {
-		cobraCommand.SetVersionTemplate("{{.Version}}\n")
-		cobraCommand.Version = command.Version
+		doVersion := false
+		oldRun := cobraCommand.Run
+		cobraCommand.Flags().BoolVar(
+			&doVersion,
+			"version",
+			false,
+			"Print the version.",
+		)
+		cobraCommand.Run = func(cmd *cobra.Command, args []string) {
+			if doVersion {
+				_, err := container.Stdout().Write([]byte(command.Version + "\n"))
+				*runErrAddr = err
+				return
+			}
+			oldRun(cmd, args)
+		}
 	}
 	// appcommand prints errors, disable to prevent duplicates.
 	cobraCommand.SilenceErrors = true

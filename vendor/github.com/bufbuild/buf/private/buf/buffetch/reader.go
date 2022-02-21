@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 
 	"github.com/bufbuild/buf/private/buf/buffetch/internal"
 	"github.com/bufbuild/buf/private/buf/bufwork"
+	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
 	"github.com/bufbuild/buf/private/pkg/app"
 	"github.com/bufbuild/buf/private/pkg/git"
@@ -139,7 +140,7 @@ func (a *reader) GetSourceBucket(
 	container app.EnvStdinContainer,
 	sourceRef SourceRef,
 	options ...GetSourceBucketOption,
-) (ReadBucketCloser, error) {
+) (ReadBucketCloserWithTerminateFileProvider, error) {
 	getSourceBucketOptions := &getSourceBucketOptions{}
 	for _, option := range options {
 		option(getSourceBucketOptions)
@@ -148,7 +149,7 @@ func (a *reader) GetSourceBucket(
 	if !getSourceBucketOptions.workspacesDisabled {
 		getBucketOptions = append(
 			getBucketOptions,
-			internal.WithGetBucketTerminateFileNames(bufwork.AllConfigFilePaths...),
+			internal.WithGetBucketTerminateFileNames([][]string{bufwork.AllConfigFilePaths, bufconfig.AllConfigFilePaths}),
 		)
 	}
 	return a.internalReader.GetBucket(

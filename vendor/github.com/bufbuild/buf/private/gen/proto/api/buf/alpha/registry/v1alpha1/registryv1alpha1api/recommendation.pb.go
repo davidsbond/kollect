@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,4 +25,14 @@ import (
 type RecommendationService interface {
 	// RecommendedRepositories returns a list of recommended repositories.
 	RecommendedRepositories(ctx context.Context) (repositories []*v1alpha1.RecommendedRepository, err error)
+	// RecommendedTemplates returns a list of recommended templates.
+	RecommendedTemplates(ctx context.Context) (templates []*v1alpha1.RecommendedTemplate, err error)
+	// ListRecommendedRepositories returns a list of recommended repositories that user have access to.
+	ListRecommendedRepositories(ctx context.Context) (repositories []*v1alpha1.RecommendedRepository, err error)
+	// ListRecommendedTemplates returns a list of recommended templates that user have access to.
+	ListRecommendedTemplates(ctx context.Context) (templates []*v1alpha1.RecommendedTemplate, err error)
+	// SetRecommendedRepositories set the list of repository recommendations in the server.
+	SetRecommendedRepositories(ctx context.Context, repositories []*v1alpha1.SetRecommendedRepository) (err error)
+	// SetRecommendedTemplates set the list of template recommendations in the server.
+	SetRecommendedTemplates(ctx context.Context, templates []*v1alpha1.SetRecommendedTemplate) (err error)
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,23 +19,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/bufbuild/buf/private/buf/bufapp"
-	"github.com/bufbuild/buf/private/buf/bufcheck/buflint"
-	"github.com/bufbuild/buf/private/buf/bufconfig"
 	"github.com/bufbuild/buf/private/buf/buffetch"
 	"github.com/bufbuild/buf/private/buf/bufwire"
-	"github.com/bufbuild/buf/private/buf/bufwork"
 	"github.com/bufbuild/buf/private/bufpkg/bufanalysis"
 	"github.com/bufbuild/buf/private/bufpkg/bufapiclient"
 	"github.com/bufbuild/buf/private/bufpkg/bufapimodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufcheck/buflint"
+	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufimage"
 	"github.com/bufbuild/buf/private/bufpkg/bufimage/bufimagebuild"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulebuild"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulecache"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
+	"github.com/bufbuild/buf/private/bufpkg/bufreflect"
 	"github.com/bufbuild/buf/private/bufpkg/bufrpc"
 	"github.com/bufbuild/buf/private/bufpkg/buftransport"
 	"github.com/bufbuild/buf/private/gen/proto/apiclient/buf/alpha/registry/v1alpha1/registryv1alpha1apiclient"
@@ -43,6 +46,7 @@ import (
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
 	"github.com/bufbuild/buf/private/pkg/app/appname"
+	"github.com/bufbuild/buf/private/pkg/command"
 	"github.com/bufbuild/buf/private/pkg/filelock"
 	"github.com/bufbuild/buf/private/pkg/git"
 	"github.com/bufbuild/buf/private/pkg/httpauth"
@@ -57,12 +61,7 @@ import (
 
 const (
 	// Version is the CLI version of buf.
-	Version = "0.56.0"
-
-	// FlagDeprecationMessageSuffix is the suffix for flag deprecation messages.
-	FlagDeprecationMessageSuffix = `
-We recommend migrating, however this flag continues to work.
-See https://docs.buf.build/faq for more details.`
+	Version = "1.0.0"
 
 	inputHTTPSUsernameEnvKey      = "BUF_INPUT_HTTPS_USERNAME"
 	inputHTTPSPasswordEnvKey      = "BUF_INPUT_HTTPS_PASSWORD"
@@ -70,6 +69,9 @@ See https://docs.buf.build/faq for more details.`
 	inputSSHKnownHostsFilesEnvKey = "BUF_INPUT_SSH_KNOWN_HOSTS_FILES"
 
 	tokenEnvKey = "BUF_TOKEN"
+
+	alphaSuppressWarningsEnvKey = "BUF_ALPHA_SUPPRESS_WARNINGS"
+	betaSuppressWarningsEnvKey  = "BUF_BETA_SUPPRESS_WARNINGS"
 
 	inputHashtagFlagName      = "__hashtag__"
 	inputHashtagFlagShortName = "#"
@@ -164,7 +166,7 @@ func BindAsFileDescriptorSet(flagSet *pflag.FlagSet, addr *bool, flagName string
 		flagName,
 		false,
 		`Output as a google.protobuf.FileDescriptorSet instead of an image.
-Note that images are wire-compatible with FileDescriptorSets, however this flag will strip
+Note that images are wire compatible with FileDescriptorSets, but this flag strips
 the additional metadata added for Buf usage.`,
 	)
 }
@@ -200,30 +202,7 @@ func BindPaths(
 		pathsFlagName,
 		nil,
 		`Limit to specific files or directories, for example "proto/a/a.proto" or "proto/a".
-If specified multiple times, the union will be taken.`,
-	)
-}
-
-// BindPathAndDeprecatedFiles binds the paths flag and the deprecated files flag.
-func BindPathsAndDeprecatedFiles(
-	flagSet *pflag.FlagSet,
-	pathsAddr *[]string,
-	pathsFlagName string,
-	filesAddr *[]string,
-	filesFlagName string,
-) {
-	BindPaths(flagSet, pathsAddr, pathsFlagName)
-	flagSet.StringSliceVar(
-		filesAddr,
-		filesFlagName,
-		nil,
-		`Limit to specific files.
-If specified multiple times, the union will be taken.`,
-	)
-	_ = flagSet.MarkHidden(filesFlagName)
-	_ = flagSet.MarkDeprecated(
-		filesFlagName,
-		fmt.Sprintf("use --%s instead.%s", pathsFlagName, FlagDeprecationMessageSuffix),
+If specified multiple times, the union is taken.`,
 	)
 }
 
@@ -243,6 +222,33 @@ func BindInputHashtag(flagSet *pflag.FlagSet, addr *string) {
 	_ = flagSet.MarkHidden(inputHashtagFlagName)
 }
 
+// BindExcludePaths binds the exclude-path flag.
+func BindExcludePaths(
+	flagSet *pflag.FlagSet,
+	excludePathsAddr *[]string,
+	excludePathsFlagName string,
+) {
+	flagSet.StringSliceVar(
+		excludePathsAddr,
+		excludePathsFlagName,
+		nil,
+		`Exclude specific files or directories, for example "proto/a/a.proto" or "proto/a".
+If specified multiple times, the union is taken.`,
+	)
+}
+
+// BindDisableSymlinks binds the disable-symlinks flag.
+func BindDisableSymlinks(flagSet *pflag.FlagSet, addr *bool, flagName string) {
+	flagSet.BoolVar(
+		addr,
+		flagName,
+		false,
+		`Do not follow symlinks when reading sources or configuration from the local filesystem.
+By default, symlinks are followed in this CLI, but never followed on the Buf Schema Registry.
+Symlinks are never followed in Windows.`,
+	)
+}
+
 // GetInputLong gets the long command description for an input-based command.
 func GetInputLong(inputArgDescription string) string {
 	return fmt.Sprintf(
@@ -251,6 +257,17 @@ The first argument must be one of format %s.
 If no argument is specified, defaults to ".".`,
 		inputArgDescription,
 		buffetch.AllFormatsString,
+	)
+}
+
+// GetSourceLong gets the long command description for an input-based command.
+func GetSourceLong(inputArgDescription string) string {
+	return fmt.Sprintf(
+		`The first argument is %s.
+The first argument must be one of format %s.
+If no argument is specified, defaults to ".".`,
+		inputArgDescription,
+		buffetch.SourceFormatsString,
 	)
 }
 
@@ -265,15 +282,13 @@ If no argument is specified, defaults to ".".`,
 	)
 }
 
-// GetInputValue gets either the first arg or the deprecated flag, but not both.
+// GetInputValue gets the first arg.
 //
 // Also parses the special input hashtag flag that deals with the situation "buf build -#format=json".
 // The existence of 0 or 1 args should be handled by the Args field on Command.
 func GetInputValue(
 	container appflag.Container,
 	inputHashtag string,
-	deprecatedFlag string,
-	deprecatedFlagName string,
 	defaultValue string,
 ) (string, error) {
 	var arg string
@@ -294,54 +309,41 @@ func GetInputValue(
 	default:
 		return "", fmt.Errorf("only 1 argument allowed but %d arguments specified", numArgs)
 	}
-	if arg != "" && deprecatedFlag != "" {
-		return "", fmt.Errorf("cannot specify both first argument and deprecated flag --%s", deprecatedFlagName)
-	}
 	if arg != "" {
 		return arg, nil
-	}
-	if deprecatedFlag != "" {
-		return deprecatedFlag, nil
 	}
 	return defaultValue, nil
 }
 
-// GetStringFlagOrDeprecatedFlag gets the flag, or the deprecated flag.
-func GetStringFlagOrDeprecatedFlag(
-	flag string,
-	flagName string,
-	deprecatedFlag string,
-	deprecatedFlagName string,
-) (string, error) {
-	if flag != "" && deprecatedFlag != "" {
-		return "", fmt.Errorf("cannot specify both --%s and --%s", flagName, deprecatedFlagName)
+// WarnAlphaCommand prints a warning for a alpha command unless the alphaSuppressWarningsEnvKey
+// environment variable is set.
+func WarnAlphaCommand(ctx context.Context, container appflag.Container) {
+	if container.Env(alphaSuppressWarningsEnvKey) == "" {
+		container.Logger().Warn("This command is in alpha. It is hidden for a reason. This command is purely for development purposes, and may never even be promoted to beta, do not rely on this command's functionality. To suppress this warning, set " + alphaSuppressWarningsEnvKey + "=1")
 	}
-	if flag != "" {
-		return flag, nil
-	}
-	return deprecatedFlag, nil
 }
 
-// GetStringSliceFlagOrDeprecatedFlag gets the flag, or the deprecated flag.
-func GetStringSliceFlagOrDeprecatedFlag(
-	flag []string,
-	flagName string,
-	deprecatedFlag []string,
-	deprecatedFlagName string,
-) ([]string, error) {
-	if len(flag) > 0 && len(deprecatedFlag) > 0 {
-		return nil, fmt.Errorf("cannot specify both --%s and --%s", flagName, deprecatedFlagName)
+// WarnBetaCommand prints a warning for a beta command unless the betaSuppressWarningsEnvKey
+// environment variable is set.
+func WarnBetaCommand(ctx context.Context, container appflag.Container) {
+	if container.Env(betaSuppressWarningsEnvKey) == "" {
+		container.Logger().Warn("This command is in beta. It is unstable and likely to change. To suppress this warning, set " + betaSuppressWarningsEnvKey + "=1")
 	}
-	if len(flag) > 0 {
-		return flag, nil
+}
+
+// NewStorageosProvider returns a new storageos.Provider based on the value of the disable-symlinks flag.
+func NewStorageosProvider(disableSymlinks bool) storageos.Provider {
+	if disableSymlinks {
+		return storageos.NewProvider()
 	}
-	return deprecatedFlag, nil
+	return storageos.NewProvider(storageos.ProviderWithSymlinks())
 }
 
 // NewWireImageConfigReader returns a new ImageConfigReader.
 func NewWireImageConfigReader(
 	container appflag.Container,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 	registryProvider registryv1alpha1apiclient.Provider,
 ) (bufwire.ImageConfigReader, error) {
 	logger := container.Logger()
@@ -353,9 +355,7 @@ func NewWireImageConfigReader(
 	return bufwire.NewImageConfigReader(
 		logger,
 		storageosProvider,
-		newFetchReader(logger, storageosProvider, moduleResolver, moduleReader),
-		bufconfig.NewProvider(logger),
-		bufwork.NewProvider(logger),
+		newFetchReader(logger, storageosProvider, runner, moduleResolver, moduleReader),
 		bufmodulebuild.NewModuleBucketBuilder(logger),
 		bufmodulebuild.NewModuleFileSetBuilder(logger, moduleReader),
 		bufimagebuild.NewBuilder(logger),
@@ -366,6 +366,7 @@ func NewWireImageConfigReader(
 func NewWireModuleConfigReader(
 	container appflag.Container,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 	registryProvider registryv1alpha1apiclient.Provider,
 ) (bufwire.ModuleConfigReader, error) {
 	logger := container.Logger()
@@ -377,9 +378,7 @@ func NewWireModuleConfigReader(
 	return bufwire.NewModuleConfigReader(
 		logger,
 		storageosProvider,
-		newFetchReader(logger, storageosProvider, moduleResolver, moduleReader),
-		bufconfig.NewProvider(logger),
-		bufwork.NewProvider(logger),
+		newFetchReader(logger, storageosProvider, runner, moduleResolver, moduleReader),
 		bufmodulebuild.NewModuleBucketBuilder(logger),
 	), nil
 }
@@ -389,6 +388,7 @@ func NewWireModuleConfigReader(
 func NewWireModuleConfigReaderForModuleReader(
 	container appflag.Container,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 	registryProvider registryv1alpha1apiclient.Provider,
 	moduleReader bufmodule.ModuleReader,
 ) (bufwire.ModuleConfigReader, error) {
@@ -397,9 +397,7 @@ func NewWireModuleConfigReaderForModuleReader(
 	return bufwire.NewModuleConfigReader(
 		logger,
 		storageosProvider,
-		newFetchReader(logger, storageosProvider, moduleResolver, moduleReader),
-		bufconfig.NewProvider(logger),
-		bufwork.NewProvider(logger),
+		newFetchReader(logger, storageosProvider, runner, moduleResolver, moduleReader),
 		bufmodulebuild.NewModuleBucketBuilder(logger),
 	), nil
 }
@@ -408,6 +406,7 @@ func NewWireModuleConfigReaderForModuleReader(
 func NewWireFileLister(
 	container appflag.Container,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 	registryProvider registryv1alpha1apiclient.Provider,
 ) (bufwire.FileLister, error) {
 	logger := container.Logger()
@@ -418,10 +417,10 @@ func NewWireFileLister(
 	}
 	return bufwire.NewFileLister(
 		logger,
-		newFetchReader(logger, storageosProvider, moduleResolver, moduleReader),
-		bufconfig.NewProvider(logger),
-		bufwork.NewProvider(logger),
+		storageosProvider,
+		newFetchReader(logger, storageosProvider, runner, moduleResolver, moduleReader),
 		bufmodulebuild.NewModuleBucketBuilder(logger),
+		bufmodulebuild.NewModuleFileSetBuilder(logger, moduleReader),
 		bufimagebuild.NewBuilder(logger),
 	), nil
 }
@@ -430,10 +429,11 @@ func NewWireFileLister(
 func NewWireImageReader(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 ) bufwire.ImageReader {
 	return bufwire.NewImageReader(
 		logger,
-		newFetchImageReader(logger, storageosProvider),
+		newFetchImageReader(logger, storageosProvider, runner),
 	)
 }
 
@@ -442,6 +442,18 @@ func NewWireImageWriter(
 	logger *zap.Logger,
 ) bufwire.ImageWriter {
 	return bufwire.NewImageWriter(
+		logger,
+		buffetch.NewWriter(
+			logger,
+		),
+	)
+}
+
+// NewWireProtoEncodingWriter returns a new ProtoEncodingWriter.
+func NewWireProtoEncodingWriter(
+	logger *zap.Logger,
+) bufwire.ProtoEncodingWriter {
+	return bufwire.NewProtoEncodingWriter(
 		logger,
 		buffetch.NewWriter(
 			logger,
@@ -495,9 +507,8 @@ func NewModuleReaderAndCreateCacheDirs(
 		fileLocker,
 		dataReadWriteBucket,
 		sumReadWriteBucket,
-		bufapimodule.NewModuleReader(
-			registryProvider,
-		),
+		bufapimodule.NewModuleReader(registryProvider),
+		registryProvider,
 	)
 	return moduleReader, nil
 }
@@ -517,18 +528,11 @@ func NewRegistryProvider(ctx context.Context, container appflag.Container) (regi
 	if err != nil {
 		return nil, err
 	}
-	useGRPC, err := buftransport.UseGRPC(container)
-	if err != nil {
-		return nil, err
-	}
 	options := []bufapiclient.RegistryProviderOption{
 		bufapiclient.RegistryProviderWithContextModifierProvider(NewContextModifierProvider(container)),
 	}
 	if buftransport.IsAPISubdomainEnabled(container) {
 		options = append(options, bufapiclient.RegistryProviderWithAddressMapper(buftransport.PrependAPISubdomain))
-	}
-	if useGRPC {
-		options = append(options, bufapiclient.RegistryProviderWithGRPC())
 	}
 	return bufapiclient.NewRegistryProvider(
 		ctx,
@@ -557,10 +561,7 @@ func NewContextModifierProvider(
 		}
 		return func(ctx context.Context) context.Context {
 			ctx = bufrpc.WithOutgoingCLIVersionHeader(ctx, Version)
-			if token != "" {
-				return rpcauth.WithToken(ctx, token)
-			}
-			return ctx
+			return rpcauth.WithTokenIfNoneSet(ctx, token)
 		}, nil
 	}
 }
@@ -630,13 +631,24 @@ func promptUser(container app.Container, prompt string, isPassword bool) (string
 		if isPassword {
 			data, err := term.ReadPassword(int(file.Fd()))
 			if err != nil {
+				// If the user submitted an EOF (e.g. via ^D) then we
+				// should not treat it as an internal error; returning
+				// the error directly makes it more clear as to
+				// why the command failed.
+				if errors.Is(err, io.EOF) {
+					return "", err
+				}
 				return "", NewInternalError(err)
 			}
 			value = string(data)
 		} else {
 			scanner := bufio.NewScanner(container.Stdin())
 			if !scanner.Scan() {
-				return "", NewInternalError(scanner.Err())
+				// scanner.Err() returns nil on EOF.
+				if err := scanner.Err(); err != nil {
+					return "", NewInternalError(err)
+				}
+				return "", io.EOF
 			}
 			value = scanner.Text()
 			if err := scanner.Err(); err != nil {
@@ -653,7 +665,7 @@ func promptUser(container app.Container, prompt string, isPassword bool) (string
 			// have another attempt.
 			if _, err := fmt.Fprintln(
 				container.Stdout(),
-				"An answer was not provided; please try again.",
+				"No answer was provided. Please try again.",
 			); err != nil {
 				return "", NewInternalError(err)
 			}
@@ -669,8 +681,9 @@ func ReadModuleWithWorkspacesDisabled(
 	ctx context.Context,
 	container appflag.Container,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 	source string,
-) (bufmodule.Module, bufmodule.ModuleIdentity, error) {
+) (bufmodule.Module, bufmoduleref.ModuleIdentity, error) {
 	sourceRef, err := buffetch.NewSourceRefParser(
 		container.Logger(),
 	).GetSourceRef(
@@ -683,6 +696,7 @@ func ReadModuleWithWorkspacesDisabled(
 	sourceBucket, err := newFetchSourceReader(
 		container.Logger(),
 		storageosProvider,
+		runner,
 	).GetSourceBucket(
 		ctx,
 		container,
@@ -700,9 +714,7 @@ func ReadModuleWithWorkspacesDisabled(
 		return nil, nil, ErrNoConfigFile
 	}
 	// TODO: This should just read a lock file
-	sourceConfig, err := bufconfig.NewProvider(
-		container.Logger(),
-	).GetConfig(
+	sourceConfig, err := bufconfig.GetConfigForBucket(
 		ctx,
 		sourceBucket,
 	)
@@ -722,6 +734,93 @@ func ReadModuleWithWorkspacesDisabled(
 		return nil, nil, err
 	}
 	return module, moduleIdentity, err
+}
+
+// NewImageForSource resolves a single bufimage.Image from the user-provided source with the build options.
+func NewImageForSource(
+	ctx context.Context,
+	container appflag.Container,
+	source string,
+	errorFormat string,
+	disableSymlinks bool,
+	configOverride string,
+	externalDirOrFilePaths []string,
+	externalExcludeDirOrFilePaths []string,
+	externalDirOrFilePathsAllowNotExist bool,
+	excludeSourceCodeInfo bool,
+) (bufimage.Image, error) {
+	ref, err := buffetch.NewRefParser(container.Logger(), buffetch.RefParserWithProtoFileRefAllowed()).GetRef(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	storageosProvider := NewStorageosProvider(disableSymlinks)
+	runner := command.NewRunner()
+	registryProvider, err := NewRegistryProvider(ctx, container)
+	if err != nil {
+		return nil, err
+	}
+	imageConfigReader, err := NewWireImageConfigReader(
+		container,
+		storageosProvider,
+		runner,
+		registryProvider,
+	)
+	if err != nil {
+		return nil, err
+	}
+	imageConfigs, fileAnnotations, err := imageConfigReader.GetImageConfigs(
+		ctx,
+		container,
+		ref,
+		configOverride,
+		externalDirOrFilePaths,
+		externalExcludeDirOrFilePaths,
+		externalDirOrFilePathsAllowNotExist,
+		excludeSourceCodeInfo,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(fileAnnotations) > 0 {
+		// stderr since we do output to stdout potentially
+		if err := bufanalysis.PrintFileAnnotations(
+			container.Stderr(),
+			fileAnnotations,
+			errorFormat,
+		); err != nil {
+			return nil, err
+		}
+		return nil, ErrFileAnnotation
+	}
+	images := make([]bufimage.Image, 0, len(imageConfigs))
+	for _, imageConfig := range imageConfigs {
+		images = append(images, imageConfig.Image())
+	}
+	return bufimage.MergeImages(images...)
+}
+
+// ParseSourceAndType returns the moduleReference and typeName from the source and type provided by the user.
+// When source is not provided, we assume the type is a fully qualified path to the type and try to parse it.
+// Otherwise, if both source and type are provided, the type must be a valid Protobuf identifier (e.g. weather.v1.Units).
+func ParseSourceAndType(
+	ctx context.Context,
+	source string,
+	typeName string,
+) (string, string, error) {
+	if source != "" && typeName != "" {
+		if err := bufreflect.ValidateTypeName(typeName); err != nil {
+			return "", "", err
+		}
+		return source, typeName, nil
+	}
+	if typeName == "" {
+		return "", "", appcmd.NewInvalidArgumentError("type is required")
+	}
+	moduleReference, moduleTypeName, err := parseFullyQualifiedPath(typeName)
+	if err != nil {
+		return "", "", appcmd.NewInvalidArgumentErrorf("if a source isn't provided, the type needs to be a fully qualified path that includes the module reference; failed to parse the type: %v", err)
+	}
+	return moduleReference, moduleTypeName, nil
 }
 
 // ValidateErrorFormatFlag validates the error format flag for all commands but lint.
@@ -748,6 +847,7 @@ func validateErrorFormatFlag(validFormatStrings []string, errorFormatString stri
 func newFetchReader(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 	moduleResolver bufmodule.ModuleResolver,
 	moduleReader bufmodule.ModuleReader,
 ) buffetch.Reader {
@@ -756,7 +856,7 @@ func newFetchReader(
 		storageosProvider,
 		defaultHTTPClient,
 		defaultHTTPAuthenticator,
-		git.NewCloner(logger, storageosProvider, defaultGitClonerOptions),
+		git.NewCloner(logger, storageosProvider, runner, defaultGitClonerOptions),
 		moduleResolver,
 		moduleReader,
 	)
@@ -767,13 +867,14 @@ func newFetchReader(
 func newFetchSourceReader(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 ) buffetch.SourceReader {
 	return buffetch.NewSourceReader(
 		logger,
 		storageosProvider,
 		defaultHTTPClient,
 		defaultHTTPAuthenticator,
-		git.NewCloner(logger, storageosProvider, defaultGitClonerOptions),
+		git.NewCloner(logger, storageosProvider, runner, defaultGitClonerOptions),
 	)
 }
 
@@ -782,13 +883,14 @@ func newFetchSourceReader(
 func newFetchImageReader(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
+	runner command.Runner,
 ) buffetch.ImageReader {
 	return buffetch.NewImageReader(
 		logger,
 		storageosProvider,
 		defaultHTTPClient,
 		defaultHTTPAuthenticator,
-		git.NewCloner(logger, storageosProvider, defaultGitClonerOptions),
+		git.NewCloner(logger, storageosProvider, runner, defaultGitClonerOptions),
 	)
 }
 
@@ -804,10 +906,10 @@ func checkExistingCacheDirs(baseCacheDirPath string, dirPaths ...string) error {
 			return err
 		}
 		if !fileInfo.IsDir() {
-			return fmt.Errorf("Expected %q to be a directory. This is used for buf's cache. The base cache directory %q can be overridden by setting the $BUF_CACHE_DIR environment variable.", dirPath, baseCacheDirPath)
+			return fmt.Errorf("Expected %q to be a directory. This is used for buf's cache. You can override the base cache directory %q by setting the $BUF_CACHE_DIR environment variable.", dirPath, baseCacheDirPath)
 		}
 		if fileInfo.Mode().Perm()&0700 != 0700 {
-			return fmt.Errorf("Expected %q to be a writeable directory. This is used for buf's cache. The base cache directory %q can be overridden by setting the $BUF_CACHE_DIR environment variable.", dirPath, baseCacheDirPath)
+			return fmt.Errorf("Expected %q to be a writeable directory. This is used for buf's cache. You can override the base cache directory %q by setting the $BUF_CACHE_DIR environment variable.", dirPath, baseCacheDirPath)
 		}
 	}
 	return nil
@@ -821,4 +923,26 @@ func createCacheDirs(dirPaths ...string) error {
 		}
 	}
 	return nil
+}
+
+// parseFullyQualifiedPath parse a string in <buf.build/owner/repository#fully-qualified-type> or
+// <buf.build/owner/repository:reference#fully-qualified-type> format into a module reference and a type name
+func parseFullyQualifiedPath(
+	fullyQualifiedPath string,
+) (moduleRef string, typeName string, _ error) {
+	if fullyQualifiedPath == "" {
+		return "", "", appcmd.NewInvalidArgumentError("you must specify a fully qualified path")
+	}
+	components := strings.Split(fullyQualifiedPath, "#")
+	if len(components) != 2 {
+		return "", "", appcmd.NewInvalidArgumentErrorf("%q is not a valid fully qualified path", fullyQualifiedPath)
+	}
+	moduleReference, err := bufmoduleref.ModuleReferenceForString(components[0])
+	if err != nil {
+		return "", "", err
+	}
+	if err := bufreflect.ValidateTypeName(components[1]); err != nil {
+		return "", "", err
+	}
+	return moduleReference.String(), components[1], nil
 }

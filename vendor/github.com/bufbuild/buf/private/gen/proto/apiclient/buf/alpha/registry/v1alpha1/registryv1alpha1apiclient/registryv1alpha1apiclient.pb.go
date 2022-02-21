@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,12 +23,16 @@ import (
 
 // Provider provides all the types in registryv1alpha1apiclient.
 type Provider interface {
+	AdminServiceProvider
+	AuditLogsServiceProvider
 	AuthnServiceProvider
 	AuthzServiceProvider
+	DisplayServiceProvider
 	DocServiceProvider
 	DownloadServiceProvider
 	GenerateServiceProvider
 	ImageServiceProvider
+	JSONSchemaServiceProvider
 	LocalResolveServiceProvider
 	OrganizationServiceProvider
 	OwnerServiceProvider
@@ -40,11 +44,22 @@ type Provider interface {
 	RepositoryCommitServiceProvider
 	RepositoryServiceProvider
 	RepositoryTagServiceProvider
+	RepositoryTrackCommitServiceProvider
+	RepositoryTrackServiceProvider
 	ResolveServiceProvider
 	SearchServiceProvider
-	TeamServiceProvider
 	TokenServiceProvider
 	UserServiceProvider
+}
+
+// AdminServiceProvider provides a client-side AdminService for an address.
+type AdminServiceProvider interface {
+	NewAdminService(ctx context.Context, address string) (registryv1alpha1api.AdminService, error)
+}
+
+// AuditLogsServiceProvider provides a client-side AuditLogsService for an address.
+type AuditLogsServiceProvider interface {
+	NewAuditLogsService(ctx context.Context, address string) (registryv1alpha1api.AuditLogsService, error)
 }
 
 // AuthnServiceProvider provides a client-side AuthnService for an address.
@@ -55,6 +70,11 @@ type AuthnServiceProvider interface {
 // AuthzServiceProvider provides a client-side AuthzService for an address.
 type AuthzServiceProvider interface {
 	NewAuthzService(ctx context.Context, address string) (registryv1alpha1api.AuthzService, error)
+}
+
+// DisplayServiceProvider provides a client-side DisplayService for an address.
+type DisplayServiceProvider interface {
+	NewDisplayService(ctx context.Context, address string) (registryv1alpha1api.DisplayService, error)
 }
 
 // DocServiceProvider provides a client-side DocService for an address.
@@ -75,6 +95,11 @@ type GenerateServiceProvider interface {
 // ImageServiceProvider provides a client-side ImageService for an address.
 type ImageServiceProvider interface {
 	NewImageService(ctx context.Context, address string) (registryv1alpha1api.ImageService, error)
+}
+
+// JSONSchemaServiceProvider provides a client-side JSONSchemaService for an address.
+type JSONSchemaServiceProvider interface {
+	NewJSONSchemaService(ctx context.Context, address string) (registryv1alpha1api.JSONSchemaService, error)
 }
 
 // LocalResolveServiceProvider provides a client-side LocalResolveService for an address.
@@ -132,6 +157,16 @@ type RepositoryTagServiceProvider interface {
 	NewRepositoryTagService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTagService, error)
 }
 
+// RepositoryTrackCommitServiceProvider provides a client-side RepositoryTrackCommitService for an address.
+type RepositoryTrackCommitServiceProvider interface {
+	NewRepositoryTrackCommitService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTrackCommitService, error)
+}
+
+// RepositoryTrackServiceProvider provides a client-side RepositoryTrackService for an address.
+type RepositoryTrackServiceProvider interface {
+	NewRepositoryTrackService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTrackService, error)
+}
+
 // ResolveServiceProvider provides a client-side ResolveService for an address.
 type ResolveServiceProvider interface {
 	NewResolveService(ctx context.Context, address string) (registryv1alpha1api.ResolveService, error)
@@ -140,11 +175,6 @@ type ResolveServiceProvider interface {
 // SearchServiceProvider provides a client-side SearchService for an address.
 type SearchServiceProvider interface {
 	NewSearchService(ctx context.Context, address string) (registryv1alpha1api.SearchService, error)
-}
-
-// TeamServiceProvider provides a client-side TeamService for an address.
-type TeamServiceProvider interface {
-	NewTeamService(ctx context.Context, address string) (registryv1alpha1api.TeamService, error)
 }
 
 // TokenServiceProvider provides a client-side TokenService for an address.

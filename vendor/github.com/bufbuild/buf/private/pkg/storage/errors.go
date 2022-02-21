@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,8 @@ func IsExistsMultipleLocations(err error) bool {
 	if err == nil {
 		return false
 	}
-	return errors.Is(err, &errorExistsMultipleLocations{})
+	asErr := &errorExistsMultipleLocations{}
+	return errors.As(err, &asErr)
 }
 
 // errorExistsMultipleLocations is the error returned if a path exists in multiple locations.
@@ -66,10 +67,4 @@ type errorExistsMultipleLocations struct {
 // Error implements error.
 func (e *errorExistsMultipleLocations) Error() string {
 	return e.Path + " exists in multiple locations: " + strings.Join(e.ExternalPaths, " ")
-}
-
-// Is implements errors.Is for errExistsMultipleLocations
-func (e *errorExistsMultipleLocations) Is(err error) bool {
-	_, ok := err.(*errorExistsMultipleLocations)
-	return ok
 }

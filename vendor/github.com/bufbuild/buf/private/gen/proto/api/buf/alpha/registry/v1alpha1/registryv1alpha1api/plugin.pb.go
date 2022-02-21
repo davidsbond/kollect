@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,13 @@ type PluginService interface {
 		pageToken string,
 		reverse bool,
 	) (plugins []*v1alpha1.Plugin, nextPageToken string, err error)
+	// GetPluginVersion returns the plugin version, if found.
+	GetPluginVersion(
+		ctx context.Context,
+		owner string,
+		name string,
+		version string,
+	) (pluginVersion *v1alpha1.PluginVersion, err error)
 	// ListPluginVersions lists all the versions available for the specified plugin.
 	ListPluginVersions(
 		ctx context.Context,
@@ -74,6 +81,36 @@ type PluginService interface {
 	// a plugin may cause breaking changes for templates using that plugin,
 	// and should be done with extreme care.
 	DeletePlugin(
+		ctx context.Context,
+		owner string,
+		name string,
+	) (err error)
+	// SetPluginContributor sets the role of a user in the plugin.
+	SetPluginContributor(
+		ctx context.Context,
+		pluginId string,
+		userId string,
+		pluginRole v1alpha1.PluginRole,
+	) (err error)
+	// ListPluginContributors returns the list of contributors that has an explicit role against the plugin.
+	// This does not include users who have implicit roles against the plugin, unless they have also been
+	// assigned a role explicitly.
+	ListPluginContributors(
+		ctx context.Context,
+		pluginId string,
+		pageSize uint32,
+		pageToken string,
+		reverse bool,
+	) (users []*v1alpha1.PluginContributor, nextPageToken string, err error)
+	// DeprecatePlugin deprecates the plugin, if found.
+	DeprecatePlugin(
+		ctx context.Context,
+		owner string,
+		name string,
+		message string,
+	) (err error)
+	// UndeprecatePlugin makes the plugin not deprecated and removes any deprecation_message.
+	UndeprecatePlugin(
 		ctx context.Context,
 		owner string,
 		name string,
@@ -147,4 +184,34 @@ type PluginService interface {
 		templateName string,
 		pluginVersions []*v1alpha1.PluginVersionMapping,
 	) (templateVersion *v1alpha1.TemplateVersion, err error)
+	// SetTemplateContributor sets the role of a user in the template.
+	SetTemplateContributor(
+		ctx context.Context,
+		templateId string,
+		userId string,
+		templateRole v1alpha1.TemplateRole,
+	) (err error)
+	// ListTemplateContributors returns the list of contributors that has an explicit role against the template.
+	// This does not include users who have implicit roles against the template, unless they have also been
+	// assigned a role explicitly.
+	ListTemplateContributors(
+		ctx context.Context,
+		templateId string,
+		pageSize uint32,
+		pageToken string,
+		reverse bool,
+	) (users []*v1alpha1.TemplateContributor, nextPageToken string, err error)
+	// DeprecateTemplate deprecates the template, if found.
+	DeprecateTemplate(
+		ctx context.Context,
+		owner string,
+		name string,
+		message string,
+	) (err error)
+	// UndeprecateTemplate makes the template not deprecated and removes any deprecation_message.
+	UndeprecateTemplate(
+		ctx context.Context,
+		owner string,
+		name string,
+	) (err error)
 }

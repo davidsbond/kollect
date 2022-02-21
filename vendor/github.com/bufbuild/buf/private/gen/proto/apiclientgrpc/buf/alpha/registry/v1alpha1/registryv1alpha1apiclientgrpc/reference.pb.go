@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ type referenceService struct {
 }
 
 // GetReferenceByName takes a reference name and returns the
-// reference either as a tag, branch, or commit.
+// reference either as a tag, branch, track or commit.
 func (s *referenceService) GetReferenceByName(
 	ctx context.Context,
 	name string,

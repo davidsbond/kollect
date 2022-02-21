@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ func (f *flags) Bind(flagSet *pflag.FlagSet) {
 		&f.TimeToLive,
 		timeToLiveFlagName,
 		24*30*time.Hour,
-		`How long the token should live for. Set to 0 for no expiry.`,
+		`How long the token should live. Set to 0 for no expiry.`,
 	)
 }
 
@@ -82,9 +82,10 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) error {
+	bufcli.WarnAlphaCommand(ctx, container)
 	remote := container.Arg(0)
 	if remote == "" {
-		return appcmd.NewInvalidArgumentError("a module remote must be specified")
+		return appcmd.NewInvalidArgumentError("you must specify a remote module")
 	}
 	var expireTime *timestamppb.Timestamp
 	var err error

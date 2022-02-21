@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@ import (
 	"fmt"
 
 	"github.com/bufbuild/buf/private/buf/bufcli"
-	"github.com/bufbuild/buf/private/buf/bufconfig"
-	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufcheck/bufbreaking/bufbreakingconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufcheck/buflint/buflintconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
@@ -32,8 +33,6 @@ const (
 	documentationCommentsFlagName = "doc"
 	outDirPathFlagName            = "output"
 	outDirPathFlagShortName       = "o"
-	nameFlagName                  = "name"
-	depFlagName                   = "dep"
 	uncommentFlagName             = "uncomment"
 )
 
@@ -41,16 +40,12 @@ const (
 func NewCommand(
 	name string,
 	builder appflag.Builder,
-	deprecated string,
-	hidden bool,
 ) *appcmd.Command {
 	flags := newFlags()
 	return &appcmd.Command{
-		Use:        name,
-		Short:      fmt.Sprintf("Initializes and writes a new %s configuration file.", bufconfig.ExternalConfigV1FilePath),
-		Args:       cobra.NoArgs,
-		Deprecated: deprecated,
-		Hidden:     hidden,
+		Use:   name,
+		Short: fmt.Sprintf("Initializes and writes a new %s configuration file.", bufconfig.ExternalConfigV1FilePath),
+		Args:  cobra.NoArgs,
 		Run: builder.NewRunFunc(
 			func(ctx context.Context, container appflag.Container) error {
 				return run(ctx, container, flags)
@@ -64,8 +59,6 @@ func NewCommand(
 type flags struct {
 	DocumentationComments bool
 	OutDirPath            string
-	Name                  string
-	Deps                  []string
 
 	// Hidden.
 	// Just used for generating docs.buf.build.
@@ -90,19 +83,6 @@ func (f *flags) Bind(flagSet *pflag.FlagSet) {
 		".",
 		`The directory to write the configuration file to.`,
 	)
-	flagSet.StringVar(
-		&f.Name,
-		nameFlagName,
-		"",
-		"The module name.",
-	)
-	flagSet.StringSliceVar(
-		&f.Deps,
-		depFlagName,
-		nil,
-		"The module dependencies.",
-	)
-	_ = flagSet.MarkHidden(depFlagName)
 	flagSet.BoolVar(
 		&f.Uncomment,
 		uncommentFlagName,
@@ -142,36 +122,36 @@ func run(
 			bufconfig.WriteConfigWithDocumentationComments(),
 		)
 	}
-	if flags.Name != "" {
-		moduleIdentity, err := bufmodule.ModuleIdentityForString(flags.Name)
-		if err != nil {
-			return err
-		}
-		writeConfigOptions = append(
-			writeConfigOptions,
-			bufconfig.WriteConfigWithModuleIdentity(moduleIdentity),
-		)
-	}
-	if len(flags.Deps) > 0 {
-		dependencyModuleReferences := make([]bufmodule.ModuleReference, len(flags.Deps))
-		for i, dep := range flags.Deps {
-			dependencyModuleReference, err := bufmodule.ModuleReferenceForString(dep)
-			if err != nil {
-				return err
-			}
-			dependencyModuleReferences[i] = dependencyModuleReference
-		}
-		writeConfigOptions = append(
-			writeConfigOptions,
-			bufconfig.WriteConfigWithDependencyModuleReferences(dependencyModuleReferences...),
-		)
-	}
 	if flags.Uncomment {
 		writeConfigOptions = append(
 			writeConfigOptions,
 			bufconfig.WriteConfigWithUncomment(),
 		)
 	}
+	// Need to include the default version (v1), lint config, and breaking config.
+	version := bufconfig.V1Version
+	writeConfigOptions = append(
+		writeConfigOptions,
+		bufconfig.WriteConfigWithVersion(version),
+	)
+	writeConfigOptions = append(
+		writeConfigOptions,
+		bufconfig.WriteConfigWithBreakingConfig(
+			&bufbreakingconfig.Config{
+				Version: version,
+				Use:     []string{"FILE"},
+			},
+		),
+	)
+	writeConfigOptions = append(
+		writeConfigOptions,
+		bufconfig.WriteConfigWithLintConfig(
+			&buflintconfig.Config{
+				Version: version,
+				Use:     []string{"DEFAULT"},
+			},
+		),
+	)
 	return bufconfig.WriteConfig(
 		ctx,
 		readWriteBucket,

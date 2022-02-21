@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,13 @@ import (
 	"time"
 
 	"github.com/bufbuild/buf/private/buf/bufcli"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/protoc"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokencreate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokendelete"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokenget"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokenlist"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/decode"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/migratev1beta1"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/commit/commitget"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/commit/commitlist"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/organization/organizationcreate"
@@ -30,72 +33,48 @@ import (
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/organization/organizationget"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/plugincreate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/plugindelete"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/plugindeprecate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/pluginlist"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/pluginundeprecate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/pluginversion/pluginversionlist"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorycreate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorydelete"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorydeprecate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositoryget"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorylist"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositoryundeprecate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/tag/tagcreate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/tag/taglist"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatecreate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatedelete"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatedeprecate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatelist"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateundeprecate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateversion/templateversioncreate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateversion/templateversionlist"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/track/trackdelete"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/track/tracklist"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/breaking"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/build"
-	"github.com/bufbuild/buf/private/buf/cmd/buf/command/config/configlsbreakingrules"
-	"github.com/bufbuild/buf/private/buf/cmd/buf/command/config/configlslintrules"
-	"github.com/bufbuild/buf/private/buf/cmd/buf/command/config/configmigratev1beta1"
-	"github.com/bufbuild/buf/private/buf/cmd/buf/command/convert"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/export"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/generate"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/lint"
-	"github.com/bufbuild/buf/private/buf/cmd/buf/command/login"
-	"github.com/bufbuild/buf/private/buf/cmd/buf/command/logout"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/lsfiles"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modclearcache"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modinit"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modlsbreakingrules"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modlslintrules"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modopen"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modprune"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modupdate"
-	"github.com/bufbuild/buf/private/buf/cmd/buf/command/protoc"
 	"github.com/bufbuild/buf/private/buf/cmd/buf/command/push"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/registry/registrylogin"
+	"github.com/bufbuild/buf/private/buf/cmd/buf/command/registry/registrylogout"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
 )
 
-const (
-	checkDeprecationMessage = `"buf check" sub-commands are now all implemented with the top-level "buf lint" and "buf breaking" commands.
-We recommend migrating, however this command continues to work.
-See https://docs.buf.build/faq for more details.`
-	checkBreakingDeprecationMessage = `"buf check breaking" has been moved to "buf breaking", use "buf breaking" instead.
-We recommend migrating, however this command continues to work.
-See https://docs.buf.build/faq for more details.`
-	checkLintDeprecationMessage = `"buf check lint" has been moved to "buf lint", use "buf lint" instead.
-We recommend migrating, however this command continues to work.
-See https://docs.buf.build/faq for more details.`
-	checkLSBreakingCheckersDeprecationMessage = `"buf check ls-breaking-checkers" has been moved to "buf config ls-breaking-rules", use "buf config ls-breaking-rules" instead.
-We recommend migrating, however this command continues to work.
-See https://docs.buf.build/faq for more details.`
-	checkLSLintCheckersDeprecationMessage = `"buf check ls-lint-checkers" has been moved to "buf config ls-lint-rules", use "buf config ls-lint-rules" instead.
-We recommend migrating, however this command continues to work.
-See https://docs.buf.build/faq for more details.`
-	imageDeprecationMessage = `"buf image" sub-commands are now all implemented under the top-level "buf build" command, use "buf build" instead.
-We recommend migrating, however this command continues to work.
-See https://docs.buf.build/faq for more details.`
-	betaConfigDeprecationMessage = `"buf beta config" has been moved to "buf beta mod".
-We recommend migrating, however this command continues to work.`
-	betaConfigInitDeprecationMessage = `"buf beta config init" has been moved to "buf mod init".
-We recommend migrating, however this command continues to work.`
-	betaPushDeprecationMessage = `"buf beta push" has been moved to "buf push".
-We recommend migrating, however this command continues to work.`
-	betaModDeprecationMessage = `"buf beta mod ..." has been moved to "buf mod ...".
-We recommend migrating, however this command continues to work.`
-	betaModExportDeprecationMessage = `"buf beta mod export" has been moved to "buf export".
-We recommend migrating, however this command continues to work.`
-)
-
+// Main is the entrypoint to the buf CLI.
 func Main(name string) {
 	appcmd.Main(context.Background(), NewRootCommand(name))
 }
@@ -111,109 +90,53 @@ func NewRootCommand(name string) *appcmd.Command {
 	)
 	globalFlags := bufcli.NewGlobalFlags()
 	return &appcmd.Command{
-		Use: name,
+		Use:                 name,
+		Short:               "The Buf CLI",
+		Long:                "A tool for working with Protocol Buffers and managing resources on the Buf Schema Registry (BSR).",
+		Version:             bufcli.Version,
+		BindPersistentFlags: appcmd.BindMultiple(builder.BindRoot, globalFlags.BindRoot),
 		SubCommands: []*appcmd.Command{
-			build.NewCommand("build", builder, "", false),
-			export.NewCommand("export", builder, "", false),
-			{
-				Use:        "image",
-				Short:      "Work with Images and FileDescriptorSets.",
-				Deprecated: imageDeprecationMessage,
-				Hidden:     true,
-				SubCommands: []*appcmd.Command{
-					build.NewCommand(
-						"build",
-						builder,
-						imageDeprecationMessage,
-						true,
-					),
-				},
-			},
-			{
-				Use:        "check",
-				Short:      "Run linting or breaking change detection.",
-				Deprecated: checkDeprecationMessage,
-				Hidden:     true,
-				SubCommands: []*appcmd.Command{
-					lint.NewCommand("lint", builder, checkLintDeprecationMessage, true),
-					breaking.NewCommand("breaking", builder, checkBreakingDeprecationMessage, true),
-					configlslintrules.NewCommand("ls-lint-checkers", builder, checkLSLintCheckersDeprecationMessage, true),
-					configlsbreakingrules.NewCommand("ls-breaking-checkers", builder, checkLSBreakingCheckersDeprecationMessage, true),
-				},
-			},
-			lint.NewCommand("lint", builder, "", false),
-			breaking.NewCommand("breaking", builder, "", false),
+			build.NewCommand("build", builder),
+			export.NewCommand("export", builder),
+			lint.NewCommand("lint", builder),
+			breaking.NewCommand("breaking", builder),
 			generate.NewCommand("generate", builder),
-			protoc.NewCommand("protoc", builder),
 			lsfiles.NewCommand("ls-files", builder),
+			push.NewCommand("push", builder),
 			{
 				Use:   "mod",
-				Short: "Configure and update buf modules.",
+				Short: "Manage Buf modules.",
 				SubCommands: []*appcmd.Command{
-					modinit.NewCommand("init", builder, "", false),
+					modinit.NewCommand("init", builder),
 					modprune.NewCommand("prune", builder),
-					modupdate.NewCommand("update", builder, "", false),
-					modclearcache.NewCommand("clear-cache", builder, "", false, "cc"),
+					modupdate.NewCommand("update", builder),
+					modopen.NewCommand("open", builder),
+					modclearcache.NewCommand("clear-cache", builder, "cc"),
+					modlslintrules.NewCommand("ls-lint-rules", builder),
+					modlsbreakingrules.NewCommand("ls-breaking-rules", builder),
 				},
 			},
 			{
-				Use:   "config",
-				Short: "Interact with the configuration of Buf.",
+				Use:   "registry",
+				Short: "Manage assets on the Buf Schema Registry.",
 				SubCommands: []*appcmd.Command{
-					configlslintrules.NewCommand("ls-lint-rules", builder, "", false),
-					configlsbreakingrules.NewCommand("ls-breaking-rules", builder, "", false),
-					configmigratev1beta1.NewCommand("migrate-v1beta1", builder),
+					registrylogin.NewCommand("login", builder),
+					registrylogout.NewCommand("logout", builder),
 				},
 			},
-			login.NewCommand("login", builder),
-			logout.NewCommand("logout", builder),
 			{
 				Use:   "beta",
-				Short: "Beta commands. Unstable and will likely change.",
+				Short: "Beta commands. Unstable and likely to change.",
 				SubCommands: []*appcmd.Command{
-					{
-						Use:        "config",
-						Short:      "Interact with the configuration of Buf.",
-						Deprecated: betaConfigDeprecationMessage,
-						Hidden:     true,
-						SubCommands: []*appcmd.Command{
-							modinit.NewCommand("init", builder, betaConfigInitDeprecationMessage, true),
-						},
-					},
-					{
-						Use:        "image",
-						Short:      "Work with Images and FileDescriptorSets.",
-						Deprecated: imageDeprecationMessage,
-						Hidden:     true,
-						SubCommands: []*appcmd.Command{
-							convert.NewCommand(
-								"convert",
-								builder,
-								imageDeprecationMessage,
-								true,
-							),
-						},
-					},
-					push.NewCommand("push", builder, betaPushDeprecationMessage, true),
-					{
-						Use:        "mod",
-						Short:      "Configure and update buf modules.",
-						Deprecated: betaModDeprecationMessage,
-						Hidden:     true,
-						SubCommands: []*appcmd.Command{
-							modinit.NewCommand("init", builder, betaModDeprecationMessage, true),
-							modupdate.NewCommand("update", builder, betaModDeprecationMessage, true),
-							export.NewCommand("export", builder, betaModExportDeprecationMessage, true),
-							modclearcache.NewCommand("clear-cache", builder, betaModDeprecationMessage, true, "cc"),
-						},
-					},
+					decode.NewCommand("decode", builder),
+					migratev1beta1.NewCommand("migrate-v1beta1", builder),
 					{
 						Use:   "registry",
-						Short: "Interact with the Buf Schema Registry.",
+						Short: "Manage assets on the Buf Schema Registry.",
 						SubCommands: []*appcmd.Command{
 							{
 								Use:   "organization",
-								Short: "Organization commands.",
+								Short: "Manage organizations.",
 								SubCommands: []*appcmd.Command{
 									organizationcreate.NewCommand("create", builder),
 									organizationget.NewCommand("get", builder),
@@ -222,25 +145,27 @@ func NewRootCommand(name string) *appcmd.Command {
 							},
 							{
 								Use:   "repository",
-								Short: "Repository commands.",
+								Short: "Manage repositories.",
 								SubCommands: []*appcmd.Command{
 									repositorycreate.NewCommand("create", builder),
 									repositoryget.NewCommand("get", builder),
 									repositorylist.NewCommand("list", builder),
 									repositorydelete.NewCommand("delete", builder),
+									repositorydeprecate.NewCommand("deprecate", builder),
+									repositoryundeprecate.NewCommand("undeprecate", builder),
 								},
 							},
-							//{
-							//	Use:   "branch",
-							//	Short: "Repository branch commands.",
-							//	SubCommands: []*appcmd.Command{
-							//		branchcreate.NewCommand("create", builder),
-							//		branchlist.NewCommand("list", builder),
-							//	},
-							//},
+							{
+								Use:   "track",
+								Short: "Manage a repository's tracks.",
+								SubCommands: []*appcmd.Command{
+									tracklist.NewCommand("list", builder),
+									trackdelete.NewCommand("delete", builder),
+								},
+							},
 							{
 								Use:   "tag",
-								Short: "Repository tag commands.",
+								Short: "Manage a repository's tags.",
 								SubCommands: []*appcmd.Command{
 									tagcreate.NewCommand("create", builder),
 									taglist.NewCommand("list", builder),
@@ -248,7 +173,7 @@ func NewRootCommand(name string) *appcmd.Command {
 							},
 							{
 								Use:   "commit",
-								Short: "Repository commit commands.",
+								Short: "Manage a repository's commits.",
 								SubCommands: []*appcmd.Command{
 									commitget.NewCommand("get", builder),
 									commitlist.NewCommand("list", builder),
@@ -256,14 +181,16 @@ func NewRootCommand(name string) *appcmd.Command {
 							},
 							{
 								Use:   "plugin",
-								Short: "Plugin commands.",
+								Short: "Manage Protobuf plugins.",
 								SubCommands: []*appcmd.Command{
 									plugincreate.NewCommand("create", builder),
 									pluginlist.NewCommand("list", builder),
 									plugindelete.NewCommand("delete", builder),
+									plugindeprecate.NewCommand("deprecate", builder),
+									pluginundeprecate.NewCommand("undeprecate", builder),
 									{
 										Use:   "version",
-										Short: "Plugin version commands.",
+										Short: "Manage Protobuf plugin versions.",
 										SubCommands: []*appcmd.Command{
 											pluginversionlist.NewCommand("list", builder),
 										},
@@ -272,14 +199,16 @@ func NewRootCommand(name string) *appcmd.Command {
 							},
 							{
 								Use:   "template",
-								Short: "Template commands.",
+								Short: "Manage Protobuf templates on the Buf Schema Registry.",
 								SubCommands: []*appcmd.Command{
 									templatecreate.NewCommand("create", builder),
 									templatelist.NewCommand("list", builder),
 									templatedelete.NewCommand("delete", builder),
+									templatedeprecate.NewCommand("deprecate", builder),
+									templateundeprecate.NewCommand("undeprecate", builder),
 									{
 										Use:   "version",
-										Short: "Template version commands.",
+										Short: "Manage Protobuf template versions.",
 										SubCommands: []*appcmd.Command{
 											templateversioncreate.NewCommand("create", builder),
 											templateversionlist.NewCommand("list", builder),
@@ -292,41 +221,18 @@ func NewRootCommand(name string) *appcmd.Command {
 				},
 			},
 			{
-				Use:   "experimental",
-				Short: "Experimental commands. Unstable and will likely change.",
-				Deprecated: `use "beta" instead.
-We recommend migrating, however this command continues to work.
-See https://docs.buf.build/faq for more details.`,
-				Hidden: true,
-				SubCommands: []*appcmd.Command{
-					{
-						Use:        "image",
-						Short:      "Work with Images and FileDescriptorSets.",
-						Deprecated: imageDeprecationMessage,
-						Hidden:     true,
-						SubCommands: []*appcmd.Command{
-							convert.NewCommand(
-								"convert",
-								builder,
-								imageDeprecationMessage,
-								true,
-							),
-						},
-					},
-				},
-			},
-			{
 				Use:    "alpha",
-				Short:  "Alpha commands. These are so early in development that they should not be used except in development.",
+				Short:  "Alpha commands. Unstable and recommended only for experimentation. These may be deleted.",
 				Hidden: true,
 				SubCommands: []*appcmd.Command{
+					protoc.NewCommand("protoc", builder),
 					{
 						Use:   "registry",
-						Short: "Interact with the Buf Schema Registry.",
+						Short: "Manage assets on the Buf Schema Registry.",
 						SubCommands: []*appcmd.Command{
 							{
 								Use:   "token",
-								Short: "Token commands.",
+								Short: "Manage user tokens.",
 								SubCommands: []*appcmd.Command{
 									tokencreate.NewCommand("create", builder),
 									tokenget.NewCommand("get", builder),
@@ -338,9 +244,6 @@ See https://docs.buf.build/faq for more details.`,
 					},
 				},
 			},
-			push.NewCommand("push", builder, "", false),
 		},
-		BindPersistentFlags: appcmd.BindMultiple(builder.BindRoot, globalFlags.BindRoot),
-		Version:             bufcli.Version,
 	}
 }

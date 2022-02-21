@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import (
 	"strings"
 )
 
+const debugBinPrefix = "__debug_bin"
+
 func init() {
 	if err := check(); err != nil {
 		panic(err.Error())
@@ -31,8 +33,9 @@ func init() {
 
 func check() error {
 	buildInfo, ok := debug.ReadBuildInfo()
-	if !ok {
-		if !strings.HasSuffix(os.Args[0], testSuffix) && filepath.Base(os.Args[0]) != debugBin {
+	if !ok || buildInfo.Main.Path == "" {
+		// Detect and allow *.test and __debug_bin* files.
+		if !strings.HasSuffix(os.Args[0], testSuffix) && !strings.HasPrefix(filepath.Base(os.Args[0]), debugBinPrefix) {
 			return errors.New("github.com/bufbuild/buf/private code must only be imported by github.com/bufbuild projects")
 		}
 		return nil

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ func (f *flags) Bind(flagSet *pflag.FlagSet) {
 	flagSet.StringVar(&f.PageToken,
 		pageTokenFlagName,
 		"",
-		`The page token. If more results are available, a "next_page" key will be present in the --format=json output.`,
+		`The page token. If more results are available, a "next_page" key is present in the --format=json output.`,
 	)
 	flagSet.BoolVar(&f.Reverse,
 		reverseFlagName,
@@ -94,6 +94,7 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) (retErr error) {
+	bufcli.WarnBetaCommand(ctx, container)
 	pluginPath := container.Arg(0)
 	format, err := bufprint.ParseFormat(flags.Format)
 	if err != nil {

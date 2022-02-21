@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,17 +20,18 @@ package bufwire
 import (
 	"context"
 
-	"github.com/bufbuild/buf/private/buf/bufconfig"
 	"github.com/bufbuild/buf/private/buf/buffetch"
-	"github.com/bufbuild/buf/private/buf/bufwork"
 	"github.com/bufbuild/buf/private/bufpkg/bufanalysis"
+	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
 	"github.com/bufbuild/buf/private/bufpkg/bufimage"
 	"github.com/bufbuild/buf/private/bufpkg/bufimage/bufimagebuild"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulebuild"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/app"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 // ImageConfig is an image and configuration.
@@ -41,7 +42,7 @@ type ImageConfig interface {
 
 // ImageConfigReader is an ImageConfig reader.
 type ImageConfigReader interface {
-	// GetImageConfig gets the ImageConfig for the fetch value.
+	// GetImageConfigs gets the ImageConfig for the fetch value.
 	//
 	// If externalDirOrFilePaths is empty, this builds all files under Buf control.
 	GetImageConfigs(
@@ -50,6 +51,7 @@ type ImageConfigReader interface {
 		ref buffetch.Ref,
 		configOverride string,
 		externalDirOrFilePaths []string,
+		externalExcludeDirOrFilePaths []string,
 		externalDirOrFilePathsAllowNotExist bool,
 		excludeSourceCodeInfo bool,
 	) ([]ImageConfig, []bufanalysis.FileAnnotation, error)
@@ -60,8 +62,6 @@ func NewImageConfigReader(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
 	fetchReader buffetch.Reader,
-	configProvider bufconfig.Provider,
-	workspaceConfigProvider bufwork.Provider,
 	moduleBucketBuilder bufmodulebuild.ModuleBucketBuilder,
 	moduleFileSetBuilder bufmodulebuild.ModuleFileSetBuilder,
 	imageBuilder bufimagebuild.Builder,
@@ -70,8 +70,6 @@ func NewImageConfigReader(
 		logger,
 		storageosProvider,
 		fetchReader,
-		configProvider,
-		workspaceConfigProvider,
 		moduleBucketBuilder,
 		moduleFileSetBuilder,
 		imageBuilder,
@@ -87,7 +85,7 @@ type ModuleConfig interface {
 
 // ModuleConfigReader is a ModuleConfig reader.
 type ModuleConfigReader interface {
-	// GetModuleConfig gets the ModuleConfig for the fetch value.
+	// GetModuleConfigs gets the ModuleConfig for the fetch value.
 	//
 	// If externalDirOrFilePaths is empty, this builds all files under Buf control.
 	//
@@ -99,6 +97,7 @@ type ModuleConfigReader interface {
 		sourceOrModuleRef buffetch.SourceOrModuleRef,
 		configOverride string,
 		externalDirOrFilePaths []string,
+		externalExcludeDirOrFilePaths []string,
 		externalDirOrFilePathsAllowNotExist bool,
 	) ([]ModuleConfig, error)
 }
@@ -108,16 +107,12 @@ func NewModuleConfigReader(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,
 	fetchReader buffetch.Reader,
-	configProvider bufconfig.Provider,
-	workspaceConfigProvider bufwork.Provider,
 	moduleBucketBuilder bufmodulebuild.ModuleBucketBuilder,
 ) ModuleConfigReader {
 	return newModuleConfigReader(
 		logger,
 		storageosProvider,
 		fetchReader,
-		configProvider,
-		workspaceConfigProvider,
 		moduleBucketBuilder,
 	)
 }
@@ -125,29 +120,34 @@ func NewModuleConfigReader(
 // FileLister lists files.
 type FileLister interface {
 	// ListFiles lists the files.
+	//
+	// If includeImports is set, the ref is built, which can result in FileAnnotations.
+	// There is no defined returned sorting order. If you need the FileInfos to
+	// be sorted, do so with bufmoduleref.SortFileInfos or bufmoduleref.SortFileInfosByExternalPath.
 	ListFiles(
 		ctx context.Context,
 		container app.EnvStdinContainer,
 		ref buffetch.Ref,
 		configOverride string,
-	) ([]bufmodule.FileInfo, error)
+		includeImports bool,
+	) ([]bufmoduleref.FileInfo, []bufanalysis.FileAnnotation, error)
 }
 
 // NewFileLister returns a new FileLister.
 func NewFileLister(
 	logger *zap.Logger,
+	storageosProvider storageos.Provider,
 	fetchReader buffetch.Reader,
-	configProvider bufconfig.Provider,
-	workspaceConfigProvider bufwork.Provider,
 	moduleBucketBuilder bufmodulebuild.ModuleBucketBuilder,
+	moduleFileSetBuilder bufmodulebuild.ModuleFileSetBuilder,
 	imageBuilder bufimagebuild.Builder,
 ) FileLister {
 	return newFileLister(
 		logger,
+		storageosProvider,
 		fetchReader,
-		configProvider,
-		workspaceConfigProvider,
 		moduleBucketBuilder,
+		moduleFileSetBuilder,
 		imageBuilder,
 	)
 }
@@ -160,6 +160,7 @@ type ImageReader interface {
 		container app.EnvStdinContainer,
 		imageRef buffetch.ImageRef,
 		externalDirOrFilePaths []string,
+		externalExcludeDirOrFilePaths []string,
 		externalDirOrFilePathsAllowNotExist bool,
 		excludeSourceCodeInfo bool,
 	) (bufimage.Image, error)
@@ -198,6 +199,32 @@ func NewImageWriter(
 	fetchWriter buffetch.Writer,
 ) ImageWriter {
 	return newImageWriter(
+		logger,
+		fetchWriter,
+	)
+}
+
+// ProtoEncodingWriter is a writer that writes a protobuf message in different encoding (e.g. JSON).
+type ProtoEncodingWriter interface {
+	// PutMessage writes the message to the path, which can be
+	// a path in file system, or stdout represented by "-".
+	//
+	// Currently, this only support json format.
+	PutMessage(
+		ctx context.Context,
+		container app.EnvStdoutContainer,
+		image bufimage.Image,
+		message proto.Message,
+		path string,
+	) error
+}
+
+// NewProtoEncodingWriter returns a new ProtoEncodingWriter.
+func NewProtoEncodingWriter(
+	logger *zap.Logger,
+	fetchWriter buffetch.Writer,
+) ProtoEncodingWriter {
+	return newProtoEncodingWriter(
 		logger,
 		fetchWriter,
 	)

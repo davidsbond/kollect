@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package registryv1alpha1api
 import (
 	context "context"
 	v1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/image/v1"
+	v1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1"
 )
 
 // ImageService serves compiled images.
@@ -30,5 +31,9 @@ type ImageService interface {
 		owner string,
 		repository string,
 		reference string,
+		excludeImports bool,
+		excludeSourceInfo bool,
+		types []string,
+		includeMask []v1alpha1.ImageMask,
 	) (image *v1.Image, err error)
 }

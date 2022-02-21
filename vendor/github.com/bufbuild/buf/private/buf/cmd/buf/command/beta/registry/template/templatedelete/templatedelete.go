@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,9 +72,10 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) error {
+	bufcli.WarnBetaCommand(ctx, container)
 	templatePath := container.Arg(0)
 	if templatePath == "" {
-		return appcmd.NewInvalidArgumentError("a template path must be specified")
+		return appcmd.NewInvalidArgumentError("you must specify a template path")
 	}
 	registryProvider, err := bufcli.NewRegistryProvider(ctx, container)
 	if err != nil {

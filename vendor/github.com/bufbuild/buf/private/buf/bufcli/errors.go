@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/app"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
 	"github.com/bufbuild/buf/private/pkg/rpc"
@@ -38,7 +38,7 @@ var (
 	ErrNoModuleName = errors.New(`please specify a module name in your configuration file with the "name" key`)
 
 	// ErrNoConfigFile is used when the user tries to execute a command without a configuration file.
-	ErrNoConfigFile = errors.New(`please define a configuration file in the current directory; you can create one by running "buf mod init"`)
+	ErrNoConfigFile = errors.New(`please define a configuration file in the current directory; you can create one by running "buf config init"`)
 
 	// ErrFileAnnotation is used when we print file annotations and want to return an error.
 	//
@@ -68,7 +68,8 @@ func NewInternalError(err error) error {
 // isInternalError returns whether the error provided, or
 // any error wrapped by that error, is an internal error.
 func isInternalError(err error) bool {
-	return errors.Is(err, &errInternal{})
+	asErr := &errInternal{}
+	return errors.As(err, &asErr)
 }
 
 func (e *errInternal) Error() string {
@@ -79,12 +80,6 @@ func (e *errInternal) Error() string {
 		return message
 	}
 	return message + ", as well as the following message: " + e.cause.Error()
-}
-
-// Is implements errors.Is for errInternal.
-func (e *errInternal) Is(err error) bool {
-	_, ok := err.(*errInternal)
-	return ok
 }
 
 // NewErrorInterceptor returns a CLI interceptor that wraps Buf CLI errors.
@@ -139,7 +134,7 @@ func NewRepositoryNotFoundError(name string) error {
 
 // NewModuleReferenceNotFoundError informs the user that a module
 // reference does not exist.
-func NewModuleReferenceNotFoundError(reference bufmodule.ModuleReference) error {
+func NewModuleReferenceNotFoundError(reference bufmoduleref.ModuleReference) error {
 	return fmt.Errorf("%q does not exist", reference)
 }
 
@@ -179,9 +174,9 @@ func wrapError(err error) error {
 	case rpcCode == rpc.ErrorCodeUnauthenticated, isEmptyUnknownError(err):
 		return errors.New(`Failure: you are not authenticated. Create a new entry in your netrc, using a Buf API Key as the password. For details, visit https://docs.buf.build/bsr/authentication`)
 	case rpcCode == rpc.ErrorCodeUnavailable:
-		return fmt.Errorf(`Failure: the server hosted at that remote is unavailable: %w.`, err)
+		return fmt.Errorf(`Failure: the server hosted at that remote is unavailable: %w`, err)
 	}
-	return fmt.Errorf("Failure: %w.", err)
+	return fmt.Errorf("Failure: %w", err)
 }
 
 // isEmptyUnknownError returns true if the given

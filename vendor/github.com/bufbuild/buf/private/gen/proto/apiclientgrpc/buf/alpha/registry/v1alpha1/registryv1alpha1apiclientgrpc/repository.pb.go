@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -184,96 +184,6 @@ func (s *repositoryService) CreateRepositoryByFullName(
 	return response.Repository, nil
 }
 
-// UpdateRepositoryName updates a repository's name.
-func (s *repositoryService) UpdateRepositoryName(
-	ctx context.Context,
-	id string,
-	newName string,
-) (repository *v1alpha1.Repository, _ error) {
-	if s.contextModifier != nil {
-		ctx = s.contextModifier(ctx)
-	}
-	response, err := s.client.UpdateRepositoryName(
-		ctx,
-		&v1alpha1.UpdateRepositoryNameRequest{
-			Id:      id,
-			NewName: newName,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return response.Repository, nil
-}
-
-// UpdateRepositoryNameByFullName updates a repository's name by full name.
-func (s *repositoryService) UpdateRepositoryNameByFullName(
-	ctx context.Context,
-	fullName string,
-	newName string,
-) (repository *v1alpha1.Repository, _ error) {
-	if s.contextModifier != nil {
-		ctx = s.contextModifier(ctx)
-	}
-	response, err := s.client.UpdateRepositoryNameByFullName(
-		ctx,
-		&v1alpha1.UpdateRepositoryNameByFullNameRequest{
-			FullName: fullName,
-			NewName:  newName,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return response.Repository, nil
-}
-
-// UpdateRepositoryVisibility updates a repository's visibility.
-func (s *repositoryService) UpdateRepositoryVisibility(
-	ctx context.Context,
-	id string,
-	newVisibility v1alpha1.Visibility,
-) (repository *v1alpha1.Repository, _ error) {
-	if s.contextModifier != nil {
-		ctx = s.contextModifier(ctx)
-	}
-	response, err := s.client.UpdateRepositoryVisibility(
-		ctx,
-		&v1alpha1.UpdateRepositoryVisibilityRequest{
-			Id:            id,
-			NewVisibility: newVisibility,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return response.Repository, nil
-}
-
-// UpdateRepositoryVisibilityByName updates a repository's visibility by name.
-func (s *repositoryService) UpdateRepositoryVisibilityByName(
-	ctx context.Context,
-	ownerName string,
-	repositoryName string,
-	newVisibility v1alpha1.Visibility,
-) (repository *v1alpha1.Repository, _ error) {
-	if s.contextModifier != nil {
-		ctx = s.contextModifier(ctx)
-	}
-	response, err := s.client.UpdateRepositoryVisibilityByName(
-		ctx,
-		&v1alpha1.UpdateRepositoryVisibilityByNameRequest{
-			OwnerName:      ownerName,
-			RepositoryName: repositoryName,
-			NewVisibility:  newVisibility,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return response.Repository, nil
-}
-
 // DeleteRepository deletes a repository.
 func (s *repositoryService) DeleteRepository(ctx context.Context, id string) (_ error) {
 	if s.contextModifier != nil {
@@ -306,4 +216,137 @@ func (s *repositoryService) DeleteRepositoryByFullName(ctx context.Context, full
 		return err
 	}
 	return nil
+}
+
+// DeprecateRepositoryByName deprecates the repository.
+func (s *repositoryService) DeprecateRepositoryByName(
+	ctx context.Context,
+	ownerName string,
+	repositoryName string,
+	deprecationMessage string,
+) (repository *v1alpha1.Repository, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.DeprecateRepositoryByName(
+		ctx,
+		&v1alpha1.DeprecateRepositoryByNameRequest{
+			OwnerName:          ownerName,
+			RepositoryName:     repositoryName,
+			DeprecationMessage: deprecationMessage,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return response.Repository, nil
+}
+
+// UndeprecateRepositoryByName makes the repository not deprecated and removes any deprecation_message.
+func (s *repositoryService) UndeprecateRepositoryByName(
+	ctx context.Context,
+	ownerName string,
+	repositoryName string,
+) (repository *v1alpha1.Repository, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.UndeprecateRepositoryByName(
+		ctx,
+		&v1alpha1.UndeprecateRepositoryByNameRequest{
+			OwnerName:      ownerName,
+			RepositoryName: repositoryName,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return response.Repository, nil
+}
+
+// GetRepositoriesByFullName gets repositories by full name. Response order is unspecified.
+// Errors if any of the repositories don't exist or the caller does not have access to any of the repositories.
+func (s *repositoryService) GetRepositoriesByFullName(ctx context.Context, fullNames []string) (repositories []*v1alpha1.Repository, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.GetRepositoriesByFullName(
+		ctx,
+		&v1alpha1.GetRepositoriesByFullNameRequest{
+			FullNames: fullNames,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return response.Repositories, nil
+}
+
+// SetRepositoryContributor sets the role of a user in the repository.
+func (s *repositoryService) SetRepositoryContributor(
+	ctx context.Context,
+	repositoryId string,
+	userId string,
+	repositoryRole v1alpha1.RepositoryRole,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.SetRepositoryContributor(
+		ctx,
+		&v1alpha1.SetRepositoryContributorRequest{
+			RepositoryId:   repositoryId,
+			UserId:         userId,
+			RepositoryRole: repositoryRole,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ListRepositoryContributors returns the list of contributors that has an explicit role against the repository.
+// This does not include users who have implicit roles against the repository, unless they have also been
+// assigned a role explicitly.
+func (s *repositoryService) ListRepositoryContributors(
+	ctx context.Context,
+	repositoryId string,
+	pageSize uint32,
+	pageToken string,
+	reverse bool,
+) (users []*v1alpha1.RepositoryContributor, nextPageToken string, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.ListRepositoryContributors(
+		ctx,
+		&v1alpha1.ListRepositoryContributorsRequest{
+			RepositoryId: repositoryId,
+			PageSize:     pageSize,
+			PageToken:    pageToken,
+			Reverse:      reverse,
+		},
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	return response.Users, response.NextPageToken, nil
+}
+
+// GetRepositorySettings gets the settings of a repository.
+func (s *repositoryService) GetRepositorySettings(ctx context.Context, repositoryId string) (contributorsCount uint32, _ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	response, err := s.client.GetRepositorySettings(
+		ctx,
+		&v1alpha1.GetRepositorySettingsRequest{
+			RepositoryId: repositoryId,
+		},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return response.ContributorsCount, nil
 }

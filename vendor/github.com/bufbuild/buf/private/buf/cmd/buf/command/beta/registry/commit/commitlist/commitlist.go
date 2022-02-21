@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 
 	"github.com/bufbuild/buf/private/buf/bufcli"
 	"github.com/bufbuild/buf/private/buf/bufprint"
-	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
+	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
 	"github.com/bufbuild/buf/private/pkg/rpc"
@@ -42,9 +42,8 @@ func NewCommand(
 ) *appcmd.Command {
 	flags := newFlags()
 	return &appcmd.Command{
-		//Use:   name + " <buf.build/owner/repo:branch>",
-		Use:   name + " <buf.build/owner/repo>",
-		Short: "List commit details",
+		Use:   name + " <buf.build/owner/repo[:ref]>",
+		Short: "List commits.",
 		Args:  cobra.ExactArgs(1),
 		Run: builder.NewRunFunc(
 			func(ctx context.Context, container appflag.Container) error {
@@ -76,7 +75,7 @@ func (f *flags) Bind(flagSet *pflag.FlagSet) {
 	flagSet.StringVar(&f.PageToken,
 		pageTokenFlagName,
 		"",
-		`The page token. If more results are available, a "next_page" key will be present in the --format=json output.`,
+		`The page token. If more results are available, a "next_page" key is present in the --format=json output.`,
 	)
 	flagSet.BoolVar(&f.Reverse,
 		reverseFlagName,
@@ -96,7 +95,8 @@ func run(
 	container appflag.Container,
 	flags *flags,
 ) error {
-	moduleReference, err := bufmodule.ModuleReferenceForString(container.Arg(0))
+	bufcli.WarnBetaCommand(ctx, container)
+	moduleReference, err := bufmoduleref.ModuleReferenceForString(container.Arg(0))
 	if err != nil {
 		return appcmd.NewInvalidArgumentError(err.Error())
 	}
@@ -114,12 +114,16 @@ func run(
 		return err
 	}
 
-	repositoryCommits, nextPageToken, err := service.ListRepositoryCommitsByBranch(
+	reference := moduleReference.Reference()
+	if reference == "" {
+		reference = bufmoduleref.MainTrack
+	}
+
+	repositoryCommits, nextPageToken, err := service.ListRepositoryCommitsByReference(
 		ctx,
 		moduleReference.Owner(),
 		moduleReference.Repository(),
-		//moduleReference.Reference(),
-		bufmodule.MainBranch,
+		reference,
 		flags.PageSize,
 		flags.PageToken,
 		flags.Reverse,

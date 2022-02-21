@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Buf Technologies, Inc.
+// Copyright 2020-2022 Buf Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,6 +66,52 @@ func WithContextModifierProvider(contextModifierProvider func(address string) (f
 	}
 }
 
+func (p *provider) NewAdminService(ctx context.Context, address string) (registryv1alpha1api.AdminService, error) {
+	var contextModifier func(context.Context) context.Context
+	var err error
+	if p.contextModifierProvider != nil {
+		contextModifier, err = p.contextModifierProvider(address)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.addressMapper != nil {
+		address = p.addressMapper(address)
+	}
+	clientConn, err := p.clientConnProvider.NewClientConn(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &adminService{
+		logger:          p.logger,
+		client:          v1alpha1.NewAdminServiceClient(clientConn),
+		contextModifier: contextModifier,
+	}, nil
+}
+
+func (p *provider) NewAuditLogsService(ctx context.Context, address string) (registryv1alpha1api.AuditLogsService, error) {
+	var contextModifier func(context.Context) context.Context
+	var err error
+	if p.contextModifierProvider != nil {
+		contextModifier, err = p.contextModifierProvider(address)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.addressMapper != nil {
+		address = p.addressMapper(address)
+	}
+	clientConn, err := p.clientConnProvider.NewClientConn(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &auditLogsService{
+		logger:          p.logger,
+		client:          v1alpha1.NewAuditLogsServiceClient(clientConn),
+		contextModifier: contextModifier,
+	}, nil
+}
+
 func (p *provider) NewAuthnService(ctx context.Context, address string) (registryv1alpha1api.AuthnService, error) {
 	var contextModifier func(context.Context) context.Context
 	var err error
@@ -108,6 +154,29 @@ func (p *provider) NewAuthzService(ctx context.Context, address string) (registr
 	return &authzService{
 		logger:          p.logger,
 		client:          v1alpha1.NewAuthzServiceClient(clientConn),
+		contextModifier: contextModifier,
+	}, nil
+}
+
+func (p *provider) NewDisplayService(ctx context.Context, address string) (registryv1alpha1api.DisplayService, error) {
+	var contextModifier func(context.Context) context.Context
+	var err error
+	if p.contextModifierProvider != nil {
+		contextModifier, err = p.contextModifierProvider(address)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.addressMapper != nil {
+		address = p.addressMapper(address)
+	}
+	clientConn, err := p.clientConnProvider.NewClientConn(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &displayService{
+		logger:          p.logger,
+		client:          v1alpha1.NewDisplayServiceClient(clientConn),
 		contextModifier: contextModifier,
 	}, nil
 }
@@ -200,6 +269,29 @@ func (p *provider) NewImageService(ctx context.Context, address string) (registr
 	return &imageService{
 		logger:          p.logger,
 		client:          v1alpha1.NewImageServiceClient(clientConn),
+		contextModifier: contextModifier,
+	}, nil
+}
+
+func (p *provider) NewJSONSchemaService(ctx context.Context, address string) (registryv1alpha1api.JSONSchemaService, error) {
+	var contextModifier func(context.Context) context.Context
+	var err error
+	if p.contextModifierProvider != nil {
+		contextModifier, err = p.contextModifierProvider(address)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.addressMapper != nil {
+		address = p.addressMapper(address)
+	}
+	clientConn, err := p.clientConnProvider.NewClientConn(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &jSONSchemaService{
+		logger:          p.logger,
+		client:          v1alpha1.NewJSONSchemaServiceClient(clientConn),
 		contextModifier: contextModifier,
 	}, nil
 }
@@ -457,6 +549,52 @@ func (p *provider) NewRepositoryTagService(ctx context.Context, address string) 
 	}, nil
 }
 
+func (p *provider) NewRepositoryTrackCommitService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTrackCommitService, error) {
+	var contextModifier func(context.Context) context.Context
+	var err error
+	if p.contextModifierProvider != nil {
+		contextModifier, err = p.contextModifierProvider(address)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.addressMapper != nil {
+		address = p.addressMapper(address)
+	}
+	clientConn, err := p.clientConnProvider.NewClientConn(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &repositoryTrackCommitService{
+		logger:          p.logger,
+		client:          v1alpha1.NewRepositoryTrackCommitServiceClient(clientConn),
+		contextModifier: contextModifier,
+	}, nil
+}
+
+func (p *provider) NewRepositoryTrackService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTrackService, error) {
+	var contextModifier func(context.Context) context.Context
+	var err error
+	if p.contextModifierProvider != nil {
+		contextModifier, err = p.contextModifierProvider(address)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.addressMapper != nil {
+		address = p.addressMapper(address)
+	}
+	clientConn, err := p.clientConnProvider.NewClientConn(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &repositoryTrackService{
+		logger:          p.logger,
+		client:          v1alpha1.NewRepositoryTrackServiceClient(clientConn),
+		contextModifier: contextModifier,
+	}, nil
+}
+
 func (p *provider) NewResolveService(ctx context.Context, address string) (registryv1alpha1api.ResolveService, error) {
 	var contextModifier func(context.Context) context.Context
 	var err error
@@ -499,29 +637,6 @@ func (p *provider) NewSearchService(ctx context.Context, address string) (regist
 	return &searchService{
 		logger:          p.logger,
 		client:          v1alpha1.NewSearchServiceClient(clientConn),
-		contextModifier: contextModifier,
-	}, nil
-}
-
-func (p *provider) NewTeamService(ctx context.Context, address string) (registryv1alpha1api.TeamService, error) {
-	var contextModifier func(context.Context) context.Context
-	var err error
-	if p.contextModifierProvider != nil {
-		contextModifier, err = p.contextModifierProvider(address)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if p.addressMapper != nil {
-		address = p.addressMapper(address)
-	}
-	clientConn, err := p.clientConnProvider.NewClientConn(ctx, address)
-	if err != nil {
-		return nil, err
-	}
-	return &teamService{
-		logger:          p.logger,
-		client:          v1alpha1.NewTeamServiceClient(clientConn),
 		contextModifier: contextModifier,
 	}, nil
 }
