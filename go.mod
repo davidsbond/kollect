@@ -20,7 +20,7 @@ require (
 	google.golang.org/genproto v0.0.0-20220211171837-173942840c17
 	google.golang.org/protobuf v1.27.1
 	k8s.io/api v0.23.3
-	k8s.io/apimachinery v0.23.3
+	k8s.io/apimachinery v0.23.4
 	k8s.io/client-go v0.23.3
 	k8s.io/klog/v2 v2.40.1
 	mvdan.cc/gofumpt v0.1.1
