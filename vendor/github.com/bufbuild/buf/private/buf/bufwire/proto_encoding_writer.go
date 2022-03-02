@@ -16,42 +16,41 @@ package bufwire
 
 import (
 	"context"
+	"fmt"
+	"os"
 
-	"github.com/bufbuild/buf/private/buf/buffetch"
+	"github.com/bufbuild/buf/private/buf/bufconvert"
 	"github.com/bufbuild/buf/private/bufpkg/bufimage"
 	"github.com/bufbuild/buf/private/pkg/app"
+	"github.com/bufbuild/buf/private/pkg/ioextended"
 	"github.com/bufbuild/buf/private/pkg/protoencoding"
-	"go.opencensus.io/trace"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
 
 type protoEncodingWriter struct {
-	logger      *zap.Logger
-	fetchWriter buffetch.Writer
+	logger *zap.Logger
 }
+
+var _ ProtoEncodingWriter = &protoEncodingWriter{}
 
 func newProtoEncodingWriter(
 	logger *zap.Logger,
-	fetchWriter buffetch.Writer,
 ) *protoEncodingWriter {
 	return &protoEncodingWriter{
-		logger:      logger,
-		fetchWriter: fetchWriter,
+		logger: logger,
 	}
 }
 
-func (i *protoEncodingWriter) PutMessage(
+func (p *protoEncodingWriter) PutMessage(
 	ctx context.Context,
 	container app.EnvStdoutContainer,
 	image bufimage.Image,
 	message proto.Message,
-	path string,
+	messageRef bufconvert.MessageEncodingRef,
 ) (retErr error) {
-	ctx, span := trace.StartSpan(ctx, "put_message")
-	defer span.End()
-	// Currently, this only support json format.
+	// Currently, this support bin and JSON format.
 	resolver, err := protoencoding.NewResolver(
 		bufimage.ImageToFileDescriptors(
 			image,
@@ -60,13 +59,25 @@ func (i *protoEncodingWriter) PutMessage(
 	if err != nil {
 		return err
 	}
-	data, err := protoencoding.NewJSONMarshalerIndent(resolver).Marshal(message)
+	var marshaler protoencoding.Marshaler
+	switch messageRef.MessageEncoding() {
+	case bufconvert.MessageEncodingBin:
+		marshaler = protoencoding.NewWireMarshaler()
+	case bufconvert.MessageEncodingJSON:
+		marshaler = protoencoding.NewJSONMarshalerIndent(resolver)
+	default:
+		return fmt.Errorf("unknown message encoding type")
+	}
+	data, err := marshaler.Marshal(message)
 	if err != nil {
 		return err
 	}
-	writeCloser, err := i.fetchWriter.PutSingleFile(ctx, container, path)
-	if err != nil {
-		return err
+	writeCloser := ioextended.NopWriteCloser(container.Stdout())
+	if messageRef.Path() != "-" {
+		writeCloser, err = os.Create(messageRef.Path())
+		if err != nil {
+			return err
+		}
 	}
 	defer func() {
 		retErr = multierr.Append(retErr, writeCloser.Close())

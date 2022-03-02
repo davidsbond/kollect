@@ -24,9 +24,15 @@ import (
 // RepositoryService is the Repository service.
 type RepositoryService interface {
 	// GetRepository gets a repository by ID.
-	GetRepository(ctx context.Context, id string) (repository *v1alpha1.Repository, err error)
+	GetRepository(
+		ctx context.Context,
+		id string,
+	) (repository *v1alpha1.Repository, counts *v1alpha1.RepositoryCounts, err error)
 	// GetRepositoryByFullName gets a repository by full name.
-	GetRepositoryByFullName(ctx context.Context, fullName string) (repository *v1alpha1.Repository, err error)
+	GetRepositoryByFullName(
+		ctx context.Context,
+		fullName string,
+	) (repository *v1alpha1.Repository, counts *v1alpha1.RepositoryCounts, err error)
 	// ListRepositories lists all repositories.
 	ListRepositories(
 		ctx context.Context,
@@ -100,6 +106,12 @@ type RepositoryService interface {
 		pageToken string,
 		reverse bool,
 	) (users []*v1alpha1.RepositoryContributor, nextPageToken string, err error)
+	// GetRepositoryContributor returns the contributor information of a user in a repository.
+	GetRepositoryContributor(
+		ctx context.Context,
+		repositoryId string,
+		userId string,
+	) (user *v1alpha1.RepositoryContributor, err error)
 	// GetRepositorySettings gets the settings of a repository.
 	GetRepositorySettings(ctx context.Context, repositoryId string) (contributorsCount uint32, err error)
 }
