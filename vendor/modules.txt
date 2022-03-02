@@ -211,16 +211,18 @@ github.com/bombsimon/wsl/v3
 # github.com/breml/bidichk v0.1.1
 ## explicit; go 1.16
 github.com/breml/bidichk/pkg/bidichk
-# github.com/bufbuild/buf v1.0.0
+# github.com/bufbuild/buf v1.1.0
 ## explicit; go 1.16
 github.com/bufbuild/buf/cmd/buf
 github.com/bufbuild/buf/private/buf/bufapp
 github.com/bufbuild/buf/private/buf/bufcli
+github.com/bufbuild/buf/private/buf/bufconvert
 github.com/bufbuild/buf/private/buf/buffetch
 github.com/bufbuild/buf/private/buf/buffetch/internal
 github.com/bufbuild/buf/private/buf/bufgen
 github.com/bufbuild/buf/private/buf/bufmigrate
 github.com/bufbuild/buf/private/buf/bufprint
+github.com/bufbuild/buf/private/buf/bufref
 github.com/bufbuild/buf/private/buf/bufwire
 github.com/bufbuild/buf/private/buf/bufwork
 github.com/bufbuild/buf/private/buf/cmd/buf
@@ -229,7 +231,7 @@ github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokencr
 github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokendelete
 github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokenget
 github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokenlist
-github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/decode
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/convert
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/migratev1beta1
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/commit/commitget
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/commit/commitlist
@@ -1098,7 +1100,7 @@ go.opencensus.io/trace/tracestate
 # go.uber.org/atomic v1.9.0
 ## explicit; go 1.13
 go.uber.org/atomic
-# go.uber.org/multierr v1.7.0
+# go.uber.org/multierr v1.8.0
 ## explicit; go 1.14
 go.uber.org/multierr
 # go.uber.org/zap v1.21.0
@@ -1149,7 +1151,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
+# golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -1173,7 +1175,7 @@ golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 ## explicit
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.0.0-20220209214540-3681064d5158
+# golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
@@ -1295,7 +1297,7 @@ google.golang.org/appengine/internal/socket
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/socket
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20220211171837-173942840c17
+# google.golang.org/genproto v0.0.0-20220228195345-15d65a4533f7
 ## explicit; go 1.15
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/expr/v1alpha1
