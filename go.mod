@@ -11,7 +11,7 @@ require (
 	github.com/prometheus/client_golang v1.12.1
 	github.com/spf13/cobra v1.4.0
 	github.com/streadway/amqp v1.0.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	gocloud.dev v0.24.0
 	gocloud.dev/pubsub/kafkapubsub v0.24.0
 	gocloud.dev/pubsub/natspubsub v0.24.0
