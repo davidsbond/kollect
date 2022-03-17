@@ -22,7 +22,7 @@ require (
 	k8s.io/api v0.23.4
 	k8s.io/apimachinery v0.23.5
 	k8s.io/client-go v0.23.4
-	k8s.io/klog/v2 v2.50.0
+	k8s.io/klog/v2 v2.50.2
 	mvdan.cc/gofumpt v0.1.1
 )
 
