@@ -158,7 +158,7 @@ func (c *TokenProviderConfiguration) NewServicePrincipalToken() (*adal.ServicePr
 			return nil, fmt.Errorf("failed to get oauth token from client credentials: %v", err)
 		}
 		if err := spToken.Refresh(); err != nil {
-			return nil, fmt.Errorf("failed to refersh token: %v", spToken)
+			return nil, fmt.Errorf("failed to refresh token: %v", spToken)
 		}
 		return spToken, nil
 	}
@@ -193,7 +193,7 @@ func (c *TokenProviderConfiguration) NewServicePrincipalToken() (*adal.ServicePr
 		return nil, fmt.Errorf("failed to get oauth token from MSI: %v", err)
 	}
 	if err := spToken.Refresh(); err != nil {
-		return nil, fmt.Errorf("failed to refersh token: %v", spToken)
+		return nil, fmt.Errorf("failed to refresh token: %v", spToken)
 	}
 	return spToken, nil
 }
