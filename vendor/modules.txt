@@ -1094,7 +1094,7 @@ gocloud.dev/pubsub/batcher
 gocloud.dev/pubsub/driver
 gocloud.dev/pubsub/gcppubsub
 gocloud.dev/pubsub/mempubsub
-# gocloud.dev/pubsub/kafkapubsub v0.24.0
+# gocloud.dev/pubsub/kafkapubsub v0.25.0
 ## explicit; go 1.12
 gocloud.dev/pubsub/kafkapubsub
 # gocloud.dev/pubsub/natspubsub v0.25.0
