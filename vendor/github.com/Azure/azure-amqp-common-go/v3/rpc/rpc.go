@@ -227,6 +227,9 @@ func (l *Link) startResponseRouter() {
 		if isClosedError(err) {
 			l.broadcastError(err)
 			break
+		} else if err != nil {
+			// this is some transient error, sleep before trying again
+			time.Sleep(time.Second)
 		}
 
 		// I don't believe this should happen. The JS version of this same code
