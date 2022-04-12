@@ -15,7 +15,7 @@ require (
 	gocloud.dev v0.25.0
 	gocloud.dev/pubsub/kafkapubsub v0.24.0
 	gocloud.dev/pubsub/natspubsub v0.25.0
-	gocloud.dev/pubsub/rabbitpubsub v0.24.0
+	gocloud.dev/pubsub/rabbitpubsub v0.25.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/genproto v0.0.0-20220401170504-314d38edb7de
 	google.golang.org/protobuf v1.28.0

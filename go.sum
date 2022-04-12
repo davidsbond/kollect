@@ -1304,8 +1304,8 @@ gocloud.dev/pubsub/kafkapubsub v0.24.0 h1:75N6ncserizmTcGXpDdG1dXg804LZX6u4NqARl
 gocloud.dev/pubsub/kafkapubsub v0.24.0/go.mod h1:qBu4RUINSgwgLqJNWSdVSESckpdHRhpOCVsyB2kAUoI=
 gocloud.dev/pubsub/natspubsub v0.25.0 h1:k7saTEnbNZeJRWW2l46pri6f9Ha8ndoyvA1QNj92nt4=
 gocloud.dev/pubsub/natspubsub v0.25.0/go.mod h1:Q8aqOBI3tmMg1IaxZBog6nq/fEyH9UNEtpO6X4aJH0I=
-gocloud.dev/pubsub/rabbitpubsub v0.24.0 h1:VE5HlB4MZrlV9hxSbF47QG46InaTx2g+P1zSC2yMVAI=
-gocloud.dev/pubsub/rabbitpubsub v0.24.0/go.mod h1:NEl2D3iEcsVo/fRcYuwONQlMHKRPCG885j909h/ja0g=
+gocloud.dev/pubsub/rabbitpubsub v0.25.0 h1:jDAHvIH0h40quEuqusYXfK28sCABAMAnjLqLybu/aeo=
+gocloud.dev/pubsub/rabbitpubsub v0.25.0/go.mod h1:gfOrMlNXnxzIYB3dK1mNenXeBwJjm2ZSRBgNzxan0/Y=
 golang.org/x/crypto v0.0.0-20180501155221-613d6eafa307/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/crypto v0.0.0-20180904163835-0709b304e793/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/crypto v0.0.0-20181029021203-45a5f77698d3/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
