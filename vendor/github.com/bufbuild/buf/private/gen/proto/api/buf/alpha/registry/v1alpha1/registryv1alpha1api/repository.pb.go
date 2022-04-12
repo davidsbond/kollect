@@ -48,7 +48,7 @@ type RepositoryService interface {
 		pageToken string,
 		reverse bool,
 	) (repositories []*v1alpha1.Repository, nextPageToken string, err error)
-	// ListUserRepositories lists all repositories a user can access.
+	// ListRepositoriesUserCanAccess lists all repositories a user can access.
 	ListRepositoriesUserCanAccess(
 		ctx context.Context,
 		pageSize uint32,
@@ -114,4 +114,11 @@ type RepositoryService interface {
 	) (user *v1alpha1.RepositoryContributor, err error)
 	// GetRepositorySettings gets the settings of a repository.
 	GetRepositorySettings(ctx context.Context, repositoryId string) (contributorsCount uint32, err error)
+	// UpdateRepositorySettingsByName updates the settings of a repository.
+	UpdateRepositorySettingsByName(
+		ctx context.Context,
+		ownerName string,
+		repositoryName string,
+		visibility v1alpha1.Visibility,
+	) (err error)
 }

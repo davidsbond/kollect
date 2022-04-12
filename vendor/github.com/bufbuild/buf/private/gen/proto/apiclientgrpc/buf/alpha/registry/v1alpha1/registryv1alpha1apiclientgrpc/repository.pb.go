@@ -118,7 +118,7 @@ func (s *repositoryService) ListUserRepositories(
 	return response.Repositories, response.NextPageToken, nil
 }
 
-// ListUserRepositories lists all repositories a user can access.
+// ListRepositoriesUserCanAccess lists all repositories a user can access.
 func (s *repositoryService) ListRepositoriesUserCanAccess(
 	ctx context.Context,
 	pageSize uint32,
@@ -377,4 +377,28 @@ func (s *repositoryService) GetRepositorySettings(ctx context.Context, repositor
 		return 0, err
 	}
 	return response.ContributorsCount, nil
+}
+
+// UpdateRepositorySettingsByName updates the settings of a repository.
+func (s *repositoryService) UpdateRepositorySettingsByName(
+	ctx context.Context,
+	ownerName string,
+	repositoryName string,
+	visibility v1alpha1.Visibility,
+) (_ error) {
+	if s.contextModifier != nil {
+		ctx = s.contextModifier(ctx)
+	}
+	_, err := s.client.UpdateRepositorySettingsByName(
+		ctx,
+		&v1alpha1.UpdateRepositorySettingsByNameRequest{
+			OwnerName:      ownerName,
+			RepositoryName: repositoryName,
+			Visibility:     visibility,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }
