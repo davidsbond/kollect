@@ -13,7 +13,7 @@ require (
 	github.com/streadway/amqp v1.0.0
 	github.com/stretchr/testify v1.7.1
 	gocloud.dev v0.25.0
-	gocloud.dev/pubsub/kafkapubsub v0.24.0
+	gocloud.dev/pubsub/kafkapubsub v0.25.0
 	gocloud.dev/pubsub/natspubsub v0.25.0
 	gocloud.dev/pubsub/rabbitpubsub v0.25.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
