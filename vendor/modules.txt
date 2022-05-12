@@ -239,7 +239,7 @@ github.com/bombsimon/wsl/v3
 # github.com/breml/bidichk v0.1.1
 ## explicit; go 1.16
 github.com/breml/bidichk/pkg/bidichk
-# github.com/bufbuild/buf v1.3.1
+# github.com/bufbuild/buf v1.4.0
 ## explicit; go 1.18
 github.com/bufbuild/buf/cmd/buf
 github.com/bufbuild/buf/private/buf/bufapp
@@ -279,6 +279,7 @@ github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/rep
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositoryget
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorylist
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositoryundeprecate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositoryupdate
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/tag/tagcreate
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/tag/taglist
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatecreate
@@ -743,13 +744,14 @@ github.com/jhump/protocompile/internal
 github.com/jhump/protocompile/parser
 github.com/jhump/protocompile/reporter
 github.com/jhump/protocompile/walk
-# github.com/jhump/protoreflect v1.11.1-0.20220213155251-0c2aedc66cf4
+# github.com/jhump/protoreflect v1.12.1-0.20220417024638-438db461d753
 ## explicit; go 1.13
 github.com/jhump/protoreflect/codec
 github.com/jhump/protoreflect/desc
 github.com/jhump/protoreflect/desc/internal
 github.com/jhump/protoreflect/desc/protoparse
 github.com/jhump/protoreflect/desc/protoparse/ast
+github.com/jhump/protoreflect/desc/sourceinfo
 github.com/jhump/protoreflect/dynamic
 github.com/jhump/protoreflect/internal
 github.com/jhump/protoreflect/internal/codec
@@ -1147,7 +1149,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20220401154927-543a649e0bdd
+# golang.org/x/net v0.0.0-20220412020605-290c469a71a5
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -1171,14 +1173,14 @@ golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 ## explicit
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f
+# golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
+# golang.org/x/term v0.0.0-20220411215600-e5f449aeb171
 ## explicit; go 1.17
 golang.org/x/term
 # golang.org/x/text v0.3.7
@@ -1263,7 +1265,7 @@ golang.org/x/tools/internal/lsp/fuzzy
 golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal
-# golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
+# golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
 ## explicit; go 1.11
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
@@ -1293,7 +1295,7 @@ google.golang.org/appengine/internal/socket
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/socket
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20220401170504-314d38edb7de
+# google.golang.org/genproto v0.0.0-20220414192740-2d67ff6cf2b4
 ## explicit; go 1.15
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/iam/v1

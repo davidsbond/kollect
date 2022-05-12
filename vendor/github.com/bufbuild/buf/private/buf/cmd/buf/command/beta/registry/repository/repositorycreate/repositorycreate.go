@@ -21,11 +21,9 @@ import (
 	"github.com/bufbuild/buf/private/buf/bufcli"
 	"github.com/bufbuild/buf/private/buf/bufprint"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
-	registryv1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
 	"github.com/bufbuild/buf/private/pkg/rpc"
-	"github.com/bufbuild/buf/private/pkg/stringutil"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -33,15 +31,7 @@ import (
 const (
 	formatFlagName     = "format"
 	visibilityFlagName = "visibility"
-
-	publicVisibility  = "public"
-	privateVisibility = "private"
 )
-
-var allVisibiltyStrings = []string{
-	publicVisibility,
-	privateVisibility,
-}
 
 // NewCommand returns a new Command
 func NewCommand(
@@ -73,19 +63,14 @@ func newFlags() *flags {
 }
 
 func (f *flags) Bind(flagSet *pflag.FlagSet) {
+	bufcli.BindVisibility(flagSet, &f.Visibility, visibilityFlagName)
+	_ = cobra.MarkFlagRequired(flagSet, visibilityFlagName)
 	flagSet.StringVar(
 		&f.Format,
 		formatFlagName,
 		bufprint.FormatText.String(),
 		fmt.Sprintf(`The output format to use. Must be one of %s.`, bufprint.AllFormatsString),
 	)
-	flagSet.StringVar(
-		&f.Visibility,
-		visibilityFlagName,
-		"",
-		fmt.Sprintf(`The repository's visibility setting. Must be one of %s.`, stringutil.SliceToString(allVisibiltyStrings)),
-	)
-	_ = cobra.MarkFlagRequired(flagSet, visibilityFlagName)
 }
 
 func run(
@@ -98,7 +83,7 @@ func run(
 	if err != nil {
 		return appcmd.NewInvalidArgumentError(err.Error())
 	}
-	visibility, err := visibilityFlagToVisibility(flags.Visibility)
+	visibility, err := bufcli.VisibilityFlagToVisibility(flags.Visibility)
 	if err != nil {
 		return appcmd.NewInvalidArgumentError(err.Error())
 	}
@@ -131,16 +116,4 @@ func run(
 		moduleIdentity.Remote(),
 		container.Stdout(),
 	).PrintRepository(ctx, format, repository)
-}
-
-// visibilityFlagToVisibility parses the given string as a registryv1alpha1.Visibility.
-func visibilityFlagToVisibility(visibility string) (registryv1alpha1.Visibility, error) {
-	switch visibility {
-	case publicVisibility:
-		return registryv1alpha1.Visibility_VISIBILITY_PUBLIC, nil
-	case privateVisibility:
-		return registryv1alpha1.Visibility_VISIBILITY_PRIVATE, nil
-	default:
-		return 0, fmt.Errorf("invalid visibility: %s, expected one of %s", visibility, stringutil.SliceToString(allVisibiltyStrings))
-	}
 }

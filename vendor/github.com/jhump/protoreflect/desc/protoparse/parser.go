@@ -533,13 +533,13 @@ func parseProtoFile(acc FileAccessor, filename string, importLoc *SourcePos, err
 	} else if d, lookupErr := lookupImport(filename); lookupErr == nil {
 		// This is a user-provided descriptor, which is acting similarly to a
 		// well-known import.
-		result = &parseResult{fd: proto.Clone(d).(*dpb.FileDescriptorProto)}
+		result = &parseResult{fd: proto.Clone(d).(*dpb.FileDescriptorProto), errs: errs}
 	} else if d, ok := standardImports[filename]; ok {
 		// it's a well-known import
 		// (we clone it to make sure we're not sharing state with other
 		//  parsers, which could result in unsafe races if multiple
 		//  parsers are trying to access it concurrently)
-		result = &parseResult{fd: proto.Clone(d).(*dpb.FileDescriptorProto)}
+		result = &parseResult{fd: proto.Clone(d).(*dpb.FileDescriptorProto), errs: errs}
 	} else {
 		if !strings.Contains(err.Error(), filename) {
 			// an error message that doesn't indicate the file is awful!
@@ -739,7 +739,7 @@ func (r *parseResult) putFieldNode(f *dpb.FieldDescriptorProto, n ast.FieldDeclN
 	r.nodes[f] = n
 }
 
-func (r *parseResult) putOneOfNode(o *dpb.OneofDescriptorProto, n *ast.OneOfNode) {
+func (r *parseResult) putOneOfNode(o *dpb.OneofDescriptorProto, n ast.OneOfDeclNode) {
 	r.nodes[o] = n
 }
 
