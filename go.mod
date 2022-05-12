@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/Azure/azure-service-bus-go v0.11.5
-	github.com/Shopify/sarama v1.32.0
+	github.com/Shopify/sarama v1.33.0
 	github.com/bufbuild/buf v1.4.0
 	github.com/golangci/golangci-lint v1.43.0
 	github.com/google/uuid v1.3.0

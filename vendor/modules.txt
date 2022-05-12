@@ -85,7 +85,7 @@ github.com/PuerkitoBio/purell
 # github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
 ## explicit
 github.com/PuerkitoBio/urlesc
-# github.com/Shopify/sarama v1.32.0
+# github.com/Shopify/sarama v1.33.0
 ## explicit; go 1.16
 github.com/Shopify/sarama
 # github.com/alexkohler/prealloc v1.0.0
