@@ -85,7 +85,7 @@ github.com/PuerkitoBio/purell
 # github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
 ## explicit
 github.com/PuerkitoBio/urlesc
-# github.com/Shopify/sarama v1.32.0
+# github.com/Shopify/sarama v1.34.0
 ## explicit; go 1.16
 github.com/Shopify/sarama
 # github.com/alexkohler/prealloc v1.0.0
@@ -239,7 +239,7 @@ github.com/bombsimon/wsl/v3
 # github.com/breml/bidichk v0.1.1
 ## explicit; go 1.16
 github.com/breml/bidichk/pkg/bidichk
-# github.com/bufbuild/buf v1.4.0
+# github.com/bufbuild/buf v1.5.0
 ## explicit; go 1.18
 github.com/bufbuild/buf/cmd/buf
 github.com/bufbuild/buf/private/buf/bufapp
@@ -289,8 +289,6 @@ github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templ
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateundeprecate
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateversion/templateversioncreate
 github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateversion/templateversionlist
-github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/track/trackdelete
-github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/track/tracklist
 github.com/bufbuild/buf/private/buf/cmd/buf/command/breaking
 github.com/bufbuild/buf/private/buf/cmd/buf/command/build
 github.com/bufbuild/buf/private/buf/cmd/buf/command/export
@@ -339,21 +337,20 @@ github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleconfig
 github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleprotoparse
 github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref
 github.com/bufbuild/buf/private/bufpkg/bufmodule/internal
-github.com/bufbuild/buf/private/bufpkg/bufplugin
 github.com/bufbuild/buf/private/bufpkg/bufreflect
+github.com/bufbuild/buf/private/bufpkg/bufremoteplugin
 github.com/bufbuild/buf/private/bufpkg/bufrpc
 github.com/bufbuild/buf/private/bufpkg/buftransport
 github.com/bufbuild/buf/private/gen/data/datawkt
 github.com/bufbuild/buf/private/gen/proto/api/buf/alpha/registry/v1alpha1/registryv1alpha1api
 github.com/bufbuild/buf/private/gen/proto/apiclient/buf/alpha/registry/v1alpha1/registryv1alpha1apiclient
-github.com/bufbuild/buf/private/gen/proto/apiclientgrpc/buf/alpha/registry/v1alpha1/registryv1alpha1apiclientgrpc
-github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/audit/v1alpha1
+github.com/bufbuild/buf/private/gen/proto/apiclientconnect/buf/alpha/registry/v1alpha1/registryv1alpha1apiclientconnect
+github.com/bufbuild/buf/private/gen/proto/connect/buf/alpha/registry/v1alpha1/registryv1alpha1connect
 github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/breaking/v1
 github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/image/v1
 github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/lint/v1
 github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/module/v1alpha1
 github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1
-github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/rpc/v1alpha1
 github.com/bufbuild/buf/private/pkg/app
 github.com/bufbuild/buf/private/pkg/app/appcmd
 github.com/bufbuild/buf/private/pkg/app/appflag
@@ -386,7 +383,6 @@ github.com/bufbuild/buf/private/pkg/prototime
 github.com/bufbuild/buf/private/pkg/protoversion
 github.com/bufbuild/buf/private/pkg/rpc
 github.com/bufbuild/buf/private/pkg/rpc/rpcauth
-github.com/bufbuild/buf/private/pkg/rpc/rpcgrpc
 github.com/bufbuild/buf/private/pkg/rpc/rpcheader
 github.com/bufbuild/buf/private/pkg/rpc/rpchttp
 github.com/bufbuild/buf/private/pkg/storage
@@ -398,12 +394,16 @@ github.com/bufbuild/buf/private/pkg/storage/storageutil
 github.com/bufbuild/buf/private/pkg/stringutil
 github.com/bufbuild/buf/private/pkg/thread
 github.com/bufbuild/buf/private/pkg/tmp
-github.com/bufbuild/buf/private/pkg/transport/grpc/grpcclient
-github.com/bufbuild/buf/private/pkg/transport/http/httpclient
+github.com/bufbuild/buf/private/pkg/transport/http2client
 github.com/bufbuild/buf/private/pkg/uuidutil
 github.com/bufbuild/buf/private/pkg/verbose
 github.com/bufbuild/buf/private/pkg/zaputil
 github.com/bufbuild/buf/private/usage
+# github.com/bufbuild/connect-go v0.0.0-20220525141242-b79148bf7e44
+## explicit; go 1.18
+github.com/bufbuild/connect-go
+github.com/bufbuild/connect-go/internal/gen/go/connect/error/v1
+github.com/bufbuild/connect-go/internal/gen/go/connectext/grpc/status/v1
 # github.com/butuzov/ireturn v0.1.1
 ## explicit; go 1.15
 github.com/butuzov/ireturn/analyzer
@@ -418,7 +418,7 @@ github.com/charithe/durationcheck
 # github.com/chavacava/garif v0.0.0-20210405164556-e8a0a408d6af
 ## explicit; go 1.16
 github.com/chavacava/garif
-# github.com/cpuguy83/go-md2man/v2 v2.0.1
+# github.com/cpuguy83/go-md2man/v2 v2.0.2
 ## explicit; go 1.11
 github.com/cpuguy83/go-md2man/v2/md2man
 # github.com/daixiang0/gci v0.2.9
@@ -621,8 +621,8 @@ github.com/google/gnostic/extensions
 github.com/google/gnostic/jsonschema
 github.com/google/gnostic/openapiv2
 github.com/google/gnostic/openapiv3
-# github.com/google/go-cmp v0.5.7
-## explicit; go 1.11
+# github.com/google/go-cmp v0.5.8
+## explicit; go 1.13
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
@@ -780,12 +780,13 @@ github.com/kisielk/errcheck/errcheck
 ## explicit
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
-# github.com/klauspost/compress v1.15.1
-## explicit; go 1.15
+# github.com/klauspost/compress v1.15.5
+## explicit; go 1.16
 github.com/klauspost/compress
 github.com/klauspost/compress/flate
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zip
 github.com/klauspost/compress/zstd
@@ -908,10 +909,13 @@ github.com/pelletier/go-toml
 # github.com/phayes/checkstyle v0.0.0-20170904204023-bfd46e6a821d
 ## explicit
 github.com/phayes/checkstyle
-# github.com/pierrec/lz4 v2.6.1+incompatible
-## explicit
-github.com/pierrec/lz4
-github.com/pierrec/lz4/internal/xxh32
+# github.com/pierrec/lz4/v4 v4.1.14
+## explicit; go 1.14
+github.com/pierrec/lz4/v4
+github.com/pierrec/lz4/v4/internal/lz4block
+github.com/pierrec/lz4/v4/internal/lz4errors
+github.com/pierrec/lz4/v4/internal/lz4stream
+github.com/pierrec/lz4/v4/internal/xxh32
 # github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 ## explicit; go 1.14
 github.com/pkg/browser
@@ -1149,7 +1153,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20220412020605-290c469a71a5
+# golang.org/x/net v0.0.0-20220526153639-5463443f8c37
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -1173,14 +1177,14 @@ golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 ## explicit
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
+# golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/term v0.0.0-20220411215600-e5f449aeb171
+# golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
 ## explicit; go 1.17
 golang.org/x/term
 # golang.org/x/text v0.3.7
@@ -1265,8 +1269,8 @@ golang.org/x/tools/internal/lsp/fuzzy
 golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal
-# golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
-## explicit; go 1.11
+# golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df
+## explicit; go 1.17
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
 # google.golang.org/api v0.74.0
@@ -1295,7 +1299,7 @@ google.golang.org/appengine/internal/socket
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/socket
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20220414192740-2d67ff6cf2b4
+# google.golang.org/genproto v0.0.0-20220525015930-6ca3db687a9d
 ## explicit; go 1.15
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/iam/v1
@@ -1308,7 +1312,7 @@ google.golang.org/genproto/protobuf/api
 google.golang.org/genproto/protobuf/field_mask
 google.golang.org/genproto/protobuf/ptype
 google.golang.org/genproto/protobuf/source_context
-# google.golang.org/grpc v1.45.0
+# google.golang.org/grpc v1.46.2
 ## explicit; go 1.14
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -1320,6 +1324,7 @@ google.golang.org/grpc/balancer/grpclb/grpc_lb_v1
 google.golang.org/grpc/balancer/grpclb/state
 google.golang.org/grpc/balancer/roundrobin
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
+google.golang.org/grpc/channelz
 google.golang.org/grpc/codes
 google.golang.org/grpc/connectivity
 google.golang.org/grpc/credentials
@@ -1334,11 +1339,11 @@ google.golang.org/grpc/credentials/google
 google.golang.org/grpc/credentials/insecure
 google.golang.org/grpc/credentials/oauth
 google.golang.org/grpc/encoding
-google.golang.org/grpc/encoding/gzip
 google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/grpclog
 google.golang.org/grpc/internal
 google.golang.org/grpc/internal/backoff
+google.golang.org/grpc/internal/balancer/gracefulswitch
 google.golang.org/grpc/internal/balancerload
 google.golang.org/grpc/internal/binarylog
 google.golang.org/grpc/internal/buffer
@@ -1351,6 +1356,7 @@ google.golang.org/grpc/internal/grpcrand
 google.golang.org/grpc/internal/grpcsync
 google.golang.org/grpc/internal/grpcutil
 google.golang.org/grpc/internal/metadata
+google.golang.org/grpc/internal/pretty
 google.golang.org/grpc/internal/resolver
 google.golang.org/grpc/internal/resolver/dns
 google.golang.org/grpc/internal/resolver/passthrough
@@ -1423,7 +1429,7 @@ gopkg.in/ini.v1
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2
-# gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+# gopkg.in/yaml.v3 v3.0.0
 ## explicit
 gopkg.in/yaml.v3
 # honnef.co/go/tools v0.2.1

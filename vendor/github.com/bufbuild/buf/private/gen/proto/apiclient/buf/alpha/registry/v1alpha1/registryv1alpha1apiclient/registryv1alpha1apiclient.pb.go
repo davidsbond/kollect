@@ -24,7 +24,6 @@ import (
 // Provider provides all the types in registryv1alpha1apiclient.
 type Provider interface {
 	AdminServiceProvider
-	AuditLogsServiceProvider
 	AuthnServiceProvider
 	AuthzServiceProvider
 	ConvertServiceProvider
@@ -50,6 +49,7 @@ type Provider interface {
 	RepositoryTrackServiceProvider
 	ResolveServiceProvider
 	SearchServiceProvider
+	StudioServiceProvider
 	TokenServiceProvider
 	UserServiceProvider
 }
@@ -57,11 +57,6 @@ type Provider interface {
 // AdminServiceProvider provides a client-side AdminService for an address.
 type AdminServiceProvider interface {
 	NewAdminService(ctx context.Context, address string) (registryv1alpha1api.AdminService, error)
-}
-
-// AuditLogsServiceProvider provides a client-side AuditLogsService for an address.
-type AuditLogsServiceProvider interface {
-	NewAuditLogsService(ctx context.Context, address string) (registryv1alpha1api.AuditLogsService, error)
 }
 
 // AuthnServiceProvider provides a client-side AuthnService for an address.
@@ -187,6 +182,11 @@ type ResolveServiceProvider interface {
 // SearchServiceProvider provides a client-side SearchService for an address.
 type SearchServiceProvider interface {
 	NewSearchService(ctx context.Context, address string) (registryv1alpha1api.SearchService, error)
+}
+
+// StudioServiceProvider provides a client-side StudioService for an address.
+type StudioServiceProvider interface {
+	NewStudioService(ctx context.Context, address string) (registryv1alpha1api.StudioService, error)
 }
 
 // TokenServiceProvider provides a client-side TokenService for an address.
