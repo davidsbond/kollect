@@ -28,13 +28,8 @@ import (
 )
 
 const (
-	// MainTrack is the name of the track created for every repository.
-	// This is the default track used if no track is specified.
-	MainTrack = "main"
-
-	// MainBranch is the name of the branch created for every repository.
-	// This is the default branch used if no branch or commit is specified.
-	MainBranch = MainTrack
+	// Main is the default reference used if no other reference is specified.
+	Main = "main"
 )
 
 // FileInfo contains module file info.
@@ -249,7 +244,7 @@ func ModuleReferenceForString(path string) (ModuleReference, error) {
 	}
 	if reference == "" {
 		// Default to the main branch if a ':' separator was not specified.
-		reference = MainBranch
+		reference = Main
 	}
 	return NewModuleReference(remote, owner, repository, reference)
 }
@@ -283,7 +278,6 @@ type ModulePin interface {
 	// all of these will be set
 	Branch() string
 	Commit() string
-	Digest() string
 	CreateTime() time.Time
 
 	isModulePin()
@@ -296,10 +290,9 @@ func NewModulePin(
 	repository string,
 	branch string,
 	commit string,
-	digest string,
 	createTime time.Time,
 ) (ModulePin, error) {
-	return newModulePin(remote, owner, repository, branch, commit, digest, createTime)
+	return newModulePin(remote, owner, repository, branch, commit, createTime)
 }
 
 // NewModulePinForProto returns a new ModulePin for the given proto ModulePin.
@@ -397,7 +390,6 @@ func ModulePinEqual(a ModulePin, b ModulePin) bool {
 		a.Repository() == b.Repository() &&
 		a.Branch() == b.Branch() &&
 		a.Commit() == b.Commit() &&
-		a.Digest() == b.Digest() &&
 		a.CreateTime().Equal(b.CreateTime())
 }
 
@@ -418,7 +410,6 @@ func DependencyModulePinsForBucket(
 			dep.Repository,
 			"",
 			dep.Commit,
-			"",
 			time.Time{},
 		)
 		if err != nil {

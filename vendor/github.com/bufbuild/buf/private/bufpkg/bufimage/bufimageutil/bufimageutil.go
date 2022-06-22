@@ -85,60 +85,61 @@ func FreeMessageRangeStrings(
 // descriptor is needed to accurately and completely describe that descriptor.
 // For the follwing types that includes:
 //
-//    Messages
-//     - messages & enums referenced in fields
-//     - proto2 extension declarations for this field
-//     - custom options for the message, its fields, and the file in which the
-//       message is defined
-//     - the parent message if this message is a nested definition
+//	Messages
+//	 - messages & enums referenced in fields
+//	 - proto2 extension declarations for this field
+//	 - custom options for the message, its fields, and the file in which the
+//	   message is defined
+//	 - the parent message if this message is a nested definition
 //
-//    Enums
-//     - Custom options used in the enum, enum values, and the file
-//       in which the message is defined
-//     - the parent message if this message is a nested definition
+//	Enums
+//	 - Custom options used in the enum, enum values, and the file
+//	   in which the message is defined
+//	 - the parent message if this message is a nested definition
 //
-//    Services
-//     - request & response types referenced in methods
-//     - custom options for the service, its methods, and the file
-//       in which the message is defined
+//	Services
+//	 - request & response types referenced in methods
+//	 - custom options for the service, its methods, and the file
+//	   in which the message is defined
 //
 // As an example, consider the following proto structure:
 //
-//   --- foo.proto ---
-//   package pkg;
-//   message Foo {
-//     optional Bar bar = 1;
-//     extensions 2 to 3;
-//   }
-//   message Bar { ... }
-//   message Baz {
-//     other.Qux qux = 1 [(other.my_option).field = "buf"];
-//   }
-//   --- baz.proto ---
-//   package other;
-//   extend Foo {
-//     optional Qux baz = 2;
-//   }
-//   message Qux{ ... }
-//   message Quux{ ... }
-//   extend google.protobuf.FieldOptions {
-//     optional Quux my_option = 51234;
-//   }
+//	--- foo.proto ---
+//	package pkg;
+//	message Foo {
+//	  optional Bar bar = 1;
+//	  extensions 2 to 3;
+//	}
+//	message Bar { ... }
+//	message Baz {
+//	  other.Qux qux = 1 [(other.my_option).field = "buf"];
+//	}
+//	--- baz.proto ---
+//	package other;
+//	extend Foo {
+//	  optional Qux baz = 2;
+//	}
+//	message Qux{ ... }
+//	message Quux{ ... }
+//	extend google.protobuf.FieldOptions {
+//	  optional Quux my_option = 51234;
+//	}
 //
 // A filtered image for type `pkg.Foo` would include
-//   files:      [foo.proto, bar.proto]
-//   messages:   [pkg.Foo, pkg.Bar, other.Qux]
-//   extensions: [other.baz]
+//
+//	files:      [foo.proto, bar.proto]
+//	messages:   [pkg.Foo, pkg.Bar, other.Qux]
+//	extensions: [other.baz]
 //
 // A filtered image for type `pkg.Bar` would include
-//   files:      [foo.proto]
-//   messages:   [pkg.Bar]
 //
-//  A filtered image for type `pkg.Baz` would include
-//   files:      [foo.proto, bar.proto]
-//   messages:   [pkg.Baz, other.Quux, other.Qux]
-//   extensions: [other.my_option]
+//	 files:      [foo.proto]
+//	 messages:   [pkg.Bar]
 //
+//	A filtered image for type `pkg.Baz` would include
+//	 files:      [foo.proto, bar.proto]
+//	 messages:   [pkg.Baz, other.Quux, other.Qux]
+//	 extensions: [other.my_option]
 func ImageFilteredByTypes(image bufimage.Image, types ...string) (bufimage.Image, error) {
 	imageIndex, err := newImageIndexForImage(image)
 	if err != nil {
@@ -166,9 +167,6 @@ func ImageFilteredByTypes(image bufimage.Image, types ...string) (bufimage.Image
 		}
 		neededDescriptors = append(neededDescriptors, closure...)
 	}
-	// By file is more convenient but we loose dfs order from
-	// descriptorTransitiveClosure, if images need files ordered by
-	// dependencies may need to rethink this.
 	descriptorsByFile := make(map[string][]descriptorAndDirects)
 	for _, descriptor := range neededDescriptors {
 		descriptorsByFile[descriptor.Descriptor.File().Path()] = append(
@@ -178,7 +176,12 @@ func ImageFilteredByTypes(image bufimage.Image, types ...string) (bufimage.Image
 	}
 	// Create a new image with only the required descriptors.
 	var includedFiles []bufimage.ImageFile
-	for file, descriptors := range descriptorsByFile {
+	for _, imageFile := range image.Files() {
+		descriptors, ok := descriptorsByFile[imageFile.Path()]
+		if !ok {
+			continue
+		}
+
 		importsRequired := make(map[string]struct{})
 		typesToKeep := make(map[string]struct{})
 		for _, descriptor := range descriptors {
@@ -190,7 +193,6 @@ func ImageFilteredByTypes(image bufimage.Image, types ...string) (bufimage.Image
 			}
 		}
 
-		imageFile := image.GetFile(file)
 		includedFiles = append(includedFiles, imageFile)
 		imageFileDescriptor := imageFile.Proto()
 		// While employing

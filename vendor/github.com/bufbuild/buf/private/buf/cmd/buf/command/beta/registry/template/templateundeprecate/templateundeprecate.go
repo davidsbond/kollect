@@ -18,10 +18,10 @@ import (
 	"context"
 
 	"github.com/bufbuild/buf/private/buf/bufcli"
-	"github.com/bufbuild/buf/private/bufpkg/bufplugin"
+	"github.com/bufbuild/buf/private/bufpkg/bufremoteplugin"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
-	"github.com/bufbuild/buf/private/pkg/rpc"
+	"github.com/bufbuild/connect-go"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +31,7 @@ func NewCommand(
 	builder appflag.Builder,
 ) *appcmd.Command {
 	return &appcmd.Command{
-		Use:   name + " <buf.build/owner/" + bufplugin.TemplatesPathName + "/template>",
+		Use:   name + " <buf.build/owner/" + bufremoteplugin.TemplatesPathName + "/template>",
 		Short: "Undeprecate a template by name.",
 		Args:  cobra.ExactArgs(1),
 		Run:   builder.NewRunFunc(run, bufcli.NewErrorInterceptor()),
@@ -51,7 +51,7 @@ func run(
 	if err != nil {
 		return err
 	}
-	remote, owner, name, err := bufplugin.ParseTemplatePath(templatePath)
+	remote, owner, name, err := bufremoteplugin.ParseTemplatePath(templatePath)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func run(
 		return err
 	}
 	if err := pluginService.UndeprecateTemplate(ctx, owner, name); err != nil {
-		if rpc.GetErrorCode(err) == rpc.ErrorCodeNotFound {
+		if connect.CodeOf(err) == connect.CodeNotFound {
 			return bufcli.NewTemplateNotFoundError(owner, name)
 		}
 		return err
