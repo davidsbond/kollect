@@ -20,14 +20,14 @@ import (
 
 	"github.com/bufbuild/buf/private/buf/bufcli"
 	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufconnect"
 	"github.com/bufbuild/buf/private/bufpkg/buflock"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
-	"github.com/bufbuild/buf/private/bufpkg/bufrpc"
 	"github.com/bufbuild/buf/private/pkg/app/appcmd"
 	"github.com/bufbuild/buf/private/pkg/app/appflag"
-	"github.com/bufbuild/buf/private/pkg/rpc"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
+	"github.com/bufbuild/connect-go"
 	"github.com/spf13/cobra"
 )
 
@@ -78,7 +78,7 @@ func run(
 	if err != nil {
 		return err
 	}
-	remote := bufrpc.DefaultRemote
+	remote := bufconnect.DefaultRemote
 	if config.ModuleIdentity != nil && config.ModuleIdentity.Remote() != "" {
 		remote = config.ModuleIdentity.Remote()
 	}
@@ -104,7 +104,7 @@ func run(
 	if len(requestReferences) > 0 {
 		protoDependencyModulePins, err := service.GetModulePins(ctx, bufmoduleref.NewProtoModuleReferencesForModuleReferences(requestReferences...), nil)
 		if err != nil {
-			if rpc.GetErrorCode(err) == rpc.ErrorCodeUnimplemented && remote != bufrpc.DefaultRemote {
+			if connect.CodeOf(err) == connect.CodeUnimplemented && remote != bufconnect.DefaultRemote {
 				return bufcli.NewUnimplementedRemoteError(err, remote, config.ModuleIdentity.IdentityString())
 			}
 			return err
