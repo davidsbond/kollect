@@ -32,12 +32,16 @@ import (
 )
 
 const (
+	// Note on versions: while Protobuf is on vX.0 where X >=21, and we
+	// download protoc vX.0, the version reported by protoc --version is 3.X.0.
+	// This is what we want to report here.
+
 	// DefaultMajorVersion is the default major version.
 	defaultMajorVersion = 3
 	// DefaultMinorVersion is the default minor version.
-	defaultMinorVersion = 19
+	defaultMinorVersion = 21
 	// DefaultPatchVersion is the default patch version.
-	defaultPatchVersion = 4
+	defaultPatchVersion = 0
 	// DefaultSuffixVersion is the default suffix version.
 	defaultSuffixVersion = ""
 )
@@ -53,6 +57,7 @@ var (
 		"objc":   {},
 		"php":    {},
 		"python": {},
+		"pyi":    {},
 		"ruby":   {},
 		"kotlin": {},
 	}
@@ -105,11 +110,11 @@ func GenerateWithPluginPath(pluginPath string) GenerateOption {
 //
 // protocPath and pluginPath are optional.
 //
-// - If the plugin path is set, this returns a new binary handler for that path.
-// - If the plugin path is unset, this does exec.LookPath for a binary named protoc-gen-pluginName,
-//   and if one is found, a new binary handler is returned for this.
-// - Else, if the name is in ProtocProxyPluginNames, this returns a new protoc proxy handler.
-// - Else, this returns error.
+//   - If the plugin path is set, this returns a new binary handler for that path.
+//   - If the plugin path is unset, this does exec.LookPath for a binary named protoc-gen-pluginName,
+//     and if one is found, a new binary handler is returned for this.
+//   - Else, if the name is in ProtocProxyPluginNames, this returns a new protoc proxy handler.
+//   - Else, this returns error.
 func NewHandler(
 	logger *zap.Logger,
 	storageosProvider storageos.Provider,

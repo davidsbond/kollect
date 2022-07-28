@@ -32,6 +32,7 @@ import (
 	"github.com/bufbuild/buf/private/bufpkg/bufapimodule"
 	"github.com/bufbuild/buf/private/bufpkg/bufcheck/buflint"
 	"github.com/bufbuild/buf/private/bufpkg/bufconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufconnect"
 	"github.com/bufbuild/buf/private/bufpkg/bufimage"
 	"github.com/bufbuild/buf/private/bufpkg/bufimage/bufimagebuild"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule"
@@ -39,7 +40,6 @@ import (
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulecache"
 	"github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleref"
 	"github.com/bufbuild/buf/private/bufpkg/bufreflect"
-	"github.com/bufbuild/buf/private/bufpkg/bufrpc"
 	"github.com/bufbuild/buf/private/bufpkg/buftransport"
 	"github.com/bufbuild/buf/private/gen/proto/apiclient/buf/alpha/registry/v1alpha1/registryv1alpha1apiclient"
 	registryv1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1"
@@ -51,11 +51,10 @@ import (
 	"github.com/bufbuild/buf/private/pkg/filelock"
 	"github.com/bufbuild/buf/private/pkg/git"
 	"github.com/bufbuild/buf/private/pkg/httpauth"
-	"github.com/bufbuild/buf/private/pkg/netrc"
 	"github.com/bufbuild/buf/private/pkg/normalpath"
-	"github.com/bufbuild/buf/private/pkg/rpc/rpcauth"
 	"github.com/bufbuild/buf/private/pkg/storage/storageos"
 	"github.com/bufbuild/buf/private/pkg/stringutil"
+	"github.com/bufbuild/buf/private/pkg/transport/http2client"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"golang.org/x/term"
@@ -63,14 +62,12 @@ import (
 
 const (
 	// Version is the CLI version of buf.
-	Version = "1.4.0"
+	Version = "1.7.0"
 
 	inputHTTPSUsernameEnvKey      = "BUF_INPUT_HTTPS_USERNAME"
 	inputHTTPSPasswordEnvKey      = "BUF_INPUT_HTTPS_PASSWORD"
 	inputSSHKeyFileEnvKey         = "BUF_INPUT_SSH_KEY_FILE"
 	inputSSHKnownHostsFilesEnvKey = "BUF_INPUT_SSH_KNOWN_HOSTS_FILES"
-
-	tokenEnvKey = "BUF_TOKEN"
 
 	alphaSuppressWarningsEnvKey = "BUF_ALPHA_SUPPRESS_WARNINGS"
 	betaSuppressWarningsEnvKey  = "BUF_BETA_SUPPRESS_WARNINGS"
@@ -289,6 +286,17 @@ The first argument must be one of format %s.
 If no argument is specified, defaults to ".".`,
 		inputArgDescription,
 		buffetch.SourceFormatsString,
+	)
+}
+
+// GetSourceDirLong gets the long command description for a directory-based command.
+func GetSourceDirLong(inputArgDescription string) string {
+	return fmt.Sprintf(
+		`The first argument is %s.
+The first argument must be one of format %s.
+If no argument is specified, defaults to ".".`,
+		inputArgDescription,
+		buffetch.SourceDirFormatsString,
 	)
 }
 
@@ -549,48 +557,53 @@ func NewConfig(container appflag.Container) (*bufapp.Config, error) {
 	return bufapp.NewConfig(container, externalConfig)
 }
 
-// NewRegistryProvider creates a new registryv1alpha1apiclient.Provider.
+// NewRegistryProvider creates a new registryv1alpha1apiclient.Provider which uses a token reader to look
+// up the token in the container or in netrc based on the address of each individual client from the provider.
+// It is then set in the header of all outgoing requests from this provider
 func NewRegistryProvider(ctx context.Context, container appflag.Container) (registryv1alpha1apiclient.Provider, error) {
+	return newRegistryProviderWithOptions(
+		container,
+		bufapiclient.RegistryProviderWithAuthInterceptorProvider(
+			bufconnect.NewAuthorizationInterceptorProvider(container),
+		),
+	)
+}
+
+// NewRegistryProvider creates a new registryv1alpha1apiclient.Provider with a given token.  The provided token is
+// set in the header of all outgoing requests from this provider
+func NewRegistryProviderWithToken(container appflag.Container, token string) (registryv1alpha1apiclient.Provider, error) {
+	return newRegistryProviderWithOptions(
+		container,
+		bufapiclient.RegistryProviderWithAuthInterceptorProvider(
+			bufconnect.NewAuthorizationInterceptorProviderWithToken(token),
+		),
+	)
+}
+
+// Returns a registry provider with the given options applied in addition to default ones for all providers
+func newRegistryProviderWithOptions(container appflag.Container, opts ...bufapiclient.RegistryProviderOption) (registryv1alpha1apiclient.Provider, error) {
 	config, err := NewConfig(container)
 	if err != nil {
 		return nil, err
 	}
-	options := []bufapiclient.RegistryProviderOption{
-		bufapiclient.RegistryProviderWithContextModifierProvider(NewContextModifierProvider(container)),
-	}
-	if buftransport.IsAPISubdomainEnabled(container) {
-		options = append(options, bufapiclient.RegistryProviderWithAddressMapper(buftransport.PrependAPISubdomain))
-	}
-	return bufapiclient.NewRegistryProvider(
-		ctx,
-		container.Logger(),
-		config.TLS,
-		options...,
+	client := http2client.NewClient(
+		http2client.WithObservability(),
+		http2client.WithTLSConfig(config.TLS),
 	)
-}
-
-// NewContextModifierProvider returns a new context modifier provider for API providers.
-//
-// Public for use in other packages that provide API provider constructors.
-func NewContextModifierProvider(
-	container appflag.Container,
-) func(string) (func(context.Context) context.Context, error) {
-	return func(address string) (func(context.Context) context.Context, error) {
-		token := container.Env(tokenEnvKey)
-		if token == "" {
-			machine, err := netrc.GetMachineForName(container, address)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read server password from netrc: %w", err)
+	options := []bufapiclient.RegistryProviderOption{
+		bufapiclient.RegistryProviderWithAddressMapper(func(address string) string {
+			if buftransport.IsAPISubdomainEnabled(container) {
+				address = buftransport.PrependAPISubdomain(address)
 			}
-			if machine != nil {
-				token = machine.Password()
-			}
-		}
-		return func(ctx context.Context) context.Context {
-			ctx = bufrpc.WithOutgoingCLIVersionHeader(ctx, Version)
-			return rpcauth.WithTokenIfNoneSet(ctx, token)
-		}, nil
+			return buftransport.PrependHTTPS(address)
+		}),
+		bufapiclient.RegistryProviderWithInterceptors(
+			bufconnect.NewSetCLIVersionInterceptor(Version),
+		),
 	}
+	options = append(options, opts...)
+
+	return bufapiclient.NewConnectClientProvider(container.Logger(), client, options...)
 }
 
 // PromptUserForDelete is used to receieve user confirmation that a specific
@@ -635,70 +648,6 @@ func PromptUser(container app.Container, prompt string) (string, error) {
 // ErrNotATTY is returned if the input containers Stdin is not a terminal.
 func PromptUserForPassword(container app.Container, prompt string) (string, error) {
 	return promptUser(container, prompt, true)
-}
-
-// promptUser reads a line from Stdin, prompting the user with the prompt first.
-// The prompt is repeatedly shown until the user provides a non-empty response.
-// ErrNotATTY is returned if the input containers Stdin is not a terminal.
-func promptUser(container app.Container, prompt string, isPassword bool) (string, error) {
-	file, ok := container.Stdin().(*os.File)
-	if !ok || !term.IsTerminal(int(file.Fd())) {
-		return "", ErrNotATTY
-	}
-	var attempts int
-	for attempts < userPromptAttempts {
-		attempts++
-		if _, err := fmt.Fprint(
-			container.Stdout(),
-			prompt,
-		); err != nil {
-			return "", NewInternalError(err)
-		}
-		var value string
-		if isPassword {
-			data, err := term.ReadPassword(int(file.Fd()))
-			if err != nil {
-				// If the user submitted an EOF (e.g. via ^D) then we
-				// should not treat it as an internal error; returning
-				// the error directly makes it more clear as to
-				// why the command failed.
-				if errors.Is(err, io.EOF) {
-					return "", err
-				}
-				return "", NewInternalError(err)
-			}
-			value = string(data)
-		} else {
-			scanner := bufio.NewScanner(container.Stdin())
-			if !scanner.Scan() {
-				// scanner.Err() returns nil on EOF.
-				if err := scanner.Err(); err != nil {
-					return "", NewInternalError(err)
-				}
-				return "", io.EOF
-			}
-			value = scanner.Text()
-			if err := scanner.Err(); err != nil {
-				return "", NewInternalError(err)
-			}
-		}
-		if len(strings.TrimSpace(value)) != 0 {
-			// We want to preserve spaces in user input, so we only apply
-			// strings.TrimSpace to verify an answer was provided.
-			return value, nil
-		}
-		if attempts < userPromptAttempts {
-			// We only want to ask the user to try again if they actually
-			// have another attempt.
-			if _, err := fmt.Fprintln(
-				container.Stdout(),
-				"No answer was provided. Please try again.",
-			); err != nil {
-				return "", NewInternalError(err)
-			}
-		}
-	}
-	return "", NewTooManyEmptyAnswersError(userPromptAttempts)
 }
 
 // ReadModuleWithWorkspacesDisabled gets a module from a source ref.
@@ -894,6 +843,70 @@ func validateErrorFormatFlag(validFormatStrings []string, errorFormatString stri
 		}
 	}
 	return appcmd.NewInvalidArgumentErrorf("--%s: invalid format: %q", errorFormatFlagName, errorFormatString)
+}
+
+// promptUser reads a line from Stdin, prompting the user with the prompt first.
+// The prompt is repeatedly shown until the user provides a non-empty response.
+// ErrNotATTY is returned if the input containers Stdin is not a terminal.
+func promptUser(container app.Container, prompt string, isPassword bool) (string, error) {
+	file, ok := container.Stdin().(*os.File)
+	if !ok || !term.IsTerminal(int(file.Fd())) {
+		return "", ErrNotATTY
+	}
+	var attempts int
+	for attempts < userPromptAttempts {
+		attempts++
+		if _, err := fmt.Fprint(
+			container.Stdout(),
+			prompt,
+		); err != nil {
+			return "", NewInternalError(err)
+		}
+		var value string
+		if isPassword {
+			data, err := term.ReadPassword(int(file.Fd()))
+			if err != nil {
+				// If the user submitted an EOF (e.g. via ^D) then we
+				// should not treat it as an internal error; returning
+				// the error directly makes it more clear as to
+				// why the command failed.
+				if errors.Is(err, io.EOF) {
+					return "", err
+				}
+				return "", NewInternalError(err)
+			}
+			value = string(data)
+		} else {
+			scanner := bufio.NewScanner(container.Stdin())
+			if !scanner.Scan() {
+				// scanner.Err() returns nil on EOF.
+				if err := scanner.Err(); err != nil {
+					return "", NewInternalError(err)
+				}
+				return "", io.EOF
+			}
+			value = scanner.Text()
+			if err := scanner.Err(); err != nil {
+				return "", NewInternalError(err)
+			}
+		}
+		if len(strings.TrimSpace(value)) != 0 {
+			// We want to preserve spaces in user input, so we only apply
+			// strings.TrimSpace to verify an answer was provided.
+			return value, nil
+		}
+		if attempts < userPromptAttempts {
+			// We only want to ask the user to try again if they actually
+			// have another attempt.
+			if _, err := fmt.Fprintln(
+				container.Stdout(),
+				"No answer was provided. Please try again.",
+			); err != nil {
+				return "", NewInternalError(err)
+			}
+		}
+	}
+	return "", NewTooManyEmptyAnswersError(userPromptAttempts)
 }
 
 // newFetchReader creates a new buffetch.Reader with the default HTTP client

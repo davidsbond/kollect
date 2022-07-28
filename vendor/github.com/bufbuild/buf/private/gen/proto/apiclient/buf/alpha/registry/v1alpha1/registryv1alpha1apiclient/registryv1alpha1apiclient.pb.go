@@ -24,9 +24,9 @@ import (
 // Provider provides all the types in registryv1alpha1apiclient.
 type Provider interface {
 	AdminServiceProvider
-	AuditLogsServiceProvider
 	AuthnServiceProvider
 	AuthzServiceProvider
+	CodeGenerationServiceProvider
 	ConvertServiceProvider
 	DisplayServiceProvider
 	DocServiceProvider
@@ -38,30 +38,25 @@ type Provider interface {
 	LocalResolveServiceProvider
 	OrganizationServiceProvider
 	OwnerServiceProvider
+	PluginCurationServiceProvider
 	PluginServiceProvider
 	PushServiceProvider
 	RecommendationServiceProvider
 	ReferenceServiceProvider
-	RepositoryBranchServiceProvider
 	RepositoryCommitServiceProvider
 	RepositoryServiceProvider
 	RepositoryTagServiceProvider
-	RepositoryTrackCommitServiceProvider
-	RepositoryTrackServiceProvider
 	ResolveServiceProvider
 	SearchServiceProvider
+	StudioServiceProvider
 	TokenServiceProvider
 	UserServiceProvider
+	WebhookServiceProvider
 }
 
 // AdminServiceProvider provides a client-side AdminService for an address.
 type AdminServiceProvider interface {
 	NewAdminService(ctx context.Context, address string) (registryv1alpha1api.AdminService, error)
-}
-
-// AuditLogsServiceProvider provides a client-side AuditLogsService for an address.
-type AuditLogsServiceProvider interface {
-	NewAuditLogsService(ctx context.Context, address string) (registryv1alpha1api.AuditLogsService, error)
 }
 
 // AuthnServiceProvider provides a client-side AuthnService for an address.
@@ -72,6 +67,11 @@ type AuthnServiceProvider interface {
 // AuthzServiceProvider provides a client-side AuthzService for an address.
 type AuthzServiceProvider interface {
 	NewAuthzService(ctx context.Context, address string) (registryv1alpha1api.AuthzService, error)
+}
+
+// CodeGenerationServiceProvider provides a client-side CodeGenerationService for an address.
+type CodeGenerationServiceProvider interface {
+	NewCodeGenerationService(ctx context.Context, address string) (registryv1alpha1api.CodeGenerationService, error)
 }
 
 // ConvertServiceProvider provides a client-side ConvertService for an address.
@@ -129,6 +129,11 @@ type OwnerServiceProvider interface {
 	NewOwnerService(ctx context.Context, address string) (registryv1alpha1api.OwnerService, error)
 }
 
+// PluginCurationServiceProvider provides a client-side PluginCurationService for an address.
+type PluginCurationServiceProvider interface {
+	NewPluginCurationService(ctx context.Context, address string) (registryv1alpha1api.PluginCurationService, error)
+}
+
 // PluginServiceProvider provides a client-side PluginService for an address.
 type PluginServiceProvider interface {
 	NewPluginService(ctx context.Context, address string) (registryv1alpha1api.PluginService, error)
@@ -149,11 +154,6 @@ type ReferenceServiceProvider interface {
 	NewReferenceService(ctx context.Context, address string) (registryv1alpha1api.ReferenceService, error)
 }
 
-// RepositoryBranchServiceProvider provides a client-side RepositoryBranchService for an address.
-type RepositoryBranchServiceProvider interface {
-	NewRepositoryBranchService(ctx context.Context, address string) (registryv1alpha1api.RepositoryBranchService, error)
-}
-
 // RepositoryCommitServiceProvider provides a client-side RepositoryCommitService for an address.
 type RepositoryCommitServiceProvider interface {
 	NewRepositoryCommitService(ctx context.Context, address string) (registryv1alpha1api.RepositoryCommitService, error)
@@ -169,16 +169,6 @@ type RepositoryTagServiceProvider interface {
 	NewRepositoryTagService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTagService, error)
 }
 
-// RepositoryTrackCommitServiceProvider provides a client-side RepositoryTrackCommitService for an address.
-type RepositoryTrackCommitServiceProvider interface {
-	NewRepositoryTrackCommitService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTrackCommitService, error)
-}
-
-// RepositoryTrackServiceProvider provides a client-side RepositoryTrackService for an address.
-type RepositoryTrackServiceProvider interface {
-	NewRepositoryTrackService(ctx context.Context, address string) (registryv1alpha1api.RepositoryTrackService, error)
-}
-
 // ResolveServiceProvider provides a client-side ResolveService for an address.
 type ResolveServiceProvider interface {
 	NewResolveService(ctx context.Context, address string) (registryv1alpha1api.ResolveService, error)
@@ -189,6 +179,11 @@ type SearchServiceProvider interface {
 	NewSearchService(ctx context.Context, address string) (registryv1alpha1api.SearchService, error)
 }
 
+// StudioServiceProvider provides a client-side StudioService for an address.
+type StudioServiceProvider interface {
+	NewStudioService(ctx context.Context, address string) (registryv1alpha1api.StudioService, error)
+}
+
 // TokenServiceProvider provides a client-side TokenService for an address.
 type TokenServiceProvider interface {
 	NewTokenService(ctx context.Context, address string) (registryv1alpha1api.TokenService, error)
@@ -197,4 +192,9 @@ type TokenServiceProvider interface {
 // UserServiceProvider provides a client-side UserService for an address.
 type UserServiceProvider interface {
 	NewUserService(ctx context.Context, address string) (registryv1alpha1api.UserService, error)
+}
+
+// WebhookServiceProvider provides a client-side WebhookService for an address.
+type WebhookServiceProvider interface {
+	NewWebhookService(ctx context.Context, address string) (registryv1alpha1api.WebhookService, error)
 }

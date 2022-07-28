@@ -15,254 +15,220 @@
 package bufplugin
 
 import (
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/bufbuild/buf/private/bufpkg/bufplugin/bufpluginconfig"
+	"github.com/bufbuild/buf/private/bufpkg/bufplugin/bufpluginref"
 	registryv1alpha1 "github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1"
-	"github.com/bufbuild/buf/private/pkg/app/appcmd"
-	"github.com/bufbuild/buf/private/pkg/encoding"
 )
 
-const (
-	// PluginsPathName is the path prefix used to signify that
-	// a name belongs to a plugin.
-	PluginsPathName = "plugins"
-
-	// TemplatesPathName is the path prefix used to signify that
-	// a name belongs to a template.
-	TemplatesPathName = "templates"
-
-	v1Version = "v1"
-)
-
-// ParsePluginPath parses a string in the format <buf.build/owner/plugins/name>
-// into remote, owner and name.
-func ParsePluginPath(pluginPath string) (remote string, owner string, name string, _ error) {
-	if pluginPath == "" {
-		return "", "", "", appcmd.NewInvalidArgumentError("you must specify a plugin path")
-	}
-	components := strings.Split(pluginPath, "/")
-	if len(components) != 4 || components[2] != PluginsPathName {
-		return "", "", "", appcmd.NewInvalidArgumentErrorf("%s is not a valid plugin path", pluginPath)
-	}
-	return components[0], components[1], components[3], nil
+// Plugin represents a plugin defined by a buf.plugin.yaml.
+type Plugin interface {
+	// Version is the version of the plugin's implementation
+	// (e.g the protoc-gen-connect-go implementation is v0.2.0).
+	Version() string
+	// SourceURL is an optional attribute used to specify where the source
+	// for the plugin can be found.
+	SourceURL() string
+	// Description is an optional attribute to provide a more detailed
+	// description for the plugin.
+	Description() string
+	// Dependencies are the dependencies this plugin has on other plugins.
+	//
+	// An example of a dependency might be a 'protoc-gen-go-grpc' plugin
+	// which depends on the 'protoc-gen-go' generated code.
+	Dependencies() []bufpluginref.PluginReference
+	// DefaultOptions is the set of default options passed to the plugin.
+	//
+	// For now, all options are string values. This could eventually
+	// support other types (like JSON Schema and Terraform variables),
+	// where strings are the default value unless otherwise specified.
+	//
+	// Note that some legacy plugins don't always express their options
+	// as key value pairs. For example, protoc-gen-java has an option
+	// that can be passed like so:
+	//
+	//  java_opt=annotate_code
+	//
+	// In those cases, the option value in this map will be set to
+	// the empty string, and the option will be propagated to the
+	// compiler without the '=' delimiter.
+	DefaultOptions() map[string]string
+	// Runtime is the runtime configuration, which lets the user specify
+	// runtime dependencies, and other metadata that applies to a specific
+	// remote generation registry (e.g. the Go module proxy, NPM registry,
+	// etc).
+	Runtime() *bufpluginconfig.RuntimeConfig
+	// ContainerImageDigest returns the plugin's source image digest.
+	//
+	// For now we only support docker image sources, but this
+	// might evolve to support others later on.
+	ContainerImageDigest() string
 }
 
-// ParsePluginVersionPath parses a string in the format <buf.build/owner/plugins/name[:version]>
-// into remote, owner, name and version. The version is empty if not specified.
-func ParsePluginVersionPath(pluginVersionPath string) (remote string, owner string, name string, version string, _ error) {
-	remote, owner, name, err := ParsePluginPath(pluginVersionPath)
-	if err != nil {
-		return "", "", "", "", err
-	}
-	components := strings.Split(name, ":")
-	switch len(components) {
-	case 2:
-		return remote, owner, components[0], components[1], nil
-	case 1:
-		return remote, owner, name, "", nil
-	default:
-		return "", "", "", "", fmt.Errorf("invalid version: %q", name)
-	}
+// NewPlugin creates a new plugin from the given configuration and image digest.
+func NewPlugin(
+	version string,
+	dependencies []bufpluginref.PluginReference,
+	defaultOptions map[string]string,
+	runtimeConfig *bufpluginconfig.RuntimeConfig,
+	imageDigest string,
+	sourceURL string,
+	description string,
+) (Plugin, error) {
+	return newPlugin(version, dependencies, defaultOptions, runtimeConfig, imageDigest, sourceURL, description)
 }
 
-// ParseTemplatePath parses a string in the format <buf.build/owner/templates/name>
-// into remote, owner and name.
-func ParseTemplatePath(templatePath string) (remote string, owner string, name string, _ error) {
-	if templatePath == "" {
-		return "", "", "", appcmd.NewInvalidArgumentError("you must specify a template path")
-	}
-	components := strings.Split(templatePath, "/")
-	if len(components) != 4 || components[2] != TemplatesPathName {
-		return "", "", "", appcmd.NewInvalidArgumentErrorf("%s is not a valid template path", templatePath)
-	}
-	return components[0], components[1], components[3], nil
-}
-
-// ValidateTemplateName validates the format of the template name.
-// This is only used for client side validation and attempts to avoid
-// validation constraints that we may want to change.
-func ValidateTemplateName(templateName string) error {
-	if templateName == "" {
-		return errors.New("template name is required")
-	}
-	return nil
-}
-
-// TemplateConfig is the config used to describe the plugins
-// of a new template.
-type TemplateConfig struct {
-	Plugins []PluginConfig
-}
-
-// TemplateConfigToProtoPluginConfigs converts the template config to a slice of proto plugin configs,
-// suitable for use with the Plugin Service CreateTemplate RPC.
-func TemplateConfigToProtoPluginConfigs(templateConfig *TemplateConfig) []*registryv1alpha1.PluginConfig {
-	pluginConfigs := make([]*registryv1alpha1.PluginConfig, 0, len(templateConfig.Plugins))
-	for _, plugin := range templateConfig.Plugins {
-		pluginConfigs = append(
-			pluginConfigs,
-			&registryv1alpha1.PluginConfig{
-				PluginOwner: plugin.Owner,
-				PluginName:  plugin.Name,
-				Parameters:  plugin.Parameters,
-			},
-		)
-	}
-	return pluginConfigs
-}
-
-// PluginConfig is the config used to describe a plugin in
-// a new template.
-type PluginConfig struct {
-	Owner      string
-	Name       string
-	Parameters []string
-}
-
-// ParseTemplateConfig parses the input template config as a path or JSON/YAML literal.
-func ParseTemplateConfig(config string) (*TemplateConfig, error) {
-	var data []byte
-	var err error
-	switch filepath.Ext(config) {
-	case ".json", ".yaml", ".yml":
-		data, err = os.ReadFile(config)
-		if err != nil {
-			return nil, fmt.Errorf("could not read file: %v", err)
+// PluginToProtoPluginLanguage determines the appropriate registryv1alpha1.PluginLanguage for the plugin.
+func PluginToProtoPluginLanguage(plugin Plugin) registryv1alpha1.PluginLanguage {
+	language := registryv1alpha1.PluginLanguage_PLUGIN_LANGUAGE_UNSPECIFIED
+	if plugin.Runtime() != nil {
+		if plugin.Runtime().Go != nil {
+			language = registryv1alpha1.PluginLanguage_PLUGIN_LANGUAGE_GO
+		} else if plugin.Runtime().NPM != nil {
+			language = registryv1alpha1.PluginLanguage_PLUGIN_LANGUAGE_NPM
 		}
-	default:
-		data = []byte(config)
 	}
-	var version externalTemplateConfigVersion
-	if err := encoding.UnmarshalJSONOrYAMLNonStrict(data, &version); err != nil {
-		return nil, fmt.Errorf("failed to determine version of template config: %w", err)
+	return language
+}
+
+// PluginRuntimeToProtoRuntimeConfig converts a bufpluginconfig.RuntimeConfig to a registryv1alpha1.RuntimeConfig.
+func PluginRuntimeToProtoRuntimeConfig(pluginRuntime *bufpluginconfig.RuntimeConfig) *registryv1alpha1.RuntimeConfig {
+	if pluginRuntime == nil {
+		return nil
 	}
-	switch version.Version {
-	case "":
-		return nil, errors.New("template config version is required")
-	case v1Version:
-	default:
-		return nil, fmt.Errorf("unknown template config version: %q", version.Version)
-	}
-	var externalConfig externalTemplateConfig
-	if err := encoding.UnmarshalJSONOrYAMLStrict(data, &externalConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal template config: %w", err)
-	}
-	templateConfig := &TemplateConfig{
-		Plugins: make([]PluginConfig, 0, len(externalConfig.Plugins)),
-	}
-	for _, plugin := range externalConfig.Plugins {
-		templatePlugin := PluginConfig{
-			Owner: plugin.Owner,
-			Name:  plugin.Name,
+	runtimeConfig := &registryv1alpha1.RuntimeConfig{}
+	if pluginRuntime.Go != nil {
+		goConfig := &registryv1alpha1.GoConfig{}
+		goConfig.MinimumVersion = pluginRuntime.Go.MinVersion
+		goConfig.RuntimeLibraries = make([]*registryv1alpha1.GoConfig_RuntimeLibrary, 0, len(pluginRuntime.Go.Deps))
+		for _, dependency := range pluginRuntime.Go.Deps {
+			goConfig.RuntimeLibraries = append(goConfig.RuntimeLibraries, goRuntimeDependencyToProtoGoRuntimeLibrary(dependency))
 		}
-		parameterString, err := encoding.InterfaceSliceOrStringToCommaSepString(plugin.Options)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse options: %w", err)
+		runtimeConfig.RuntimeConfig = &registryv1alpha1.RuntimeConfig_GoConfig{GoConfig: goConfig}
+	} else if pluginRuntime.NPM != nil {
+		npmConfig := &registryv1alpha1.NPMConfig{}
+		npmConfig.RuntimeLibraries = make([]*registryv1alpha1.NPMConfig_RuntimeLibrary, 0, len(pluginRuntime.NPM.Deps))
+		for _, dependency := range pluginRuntime.NPM.Deps {
+			npmConfig.RuntimeLibraries = append(npmConfig.RuntimeLibraries, npmRuntimeDependencyToProtoNPMRuntimeLibrary(dependency))
 		}
-		if parameterString != "" {
-			templatePlugin.Parameters = strings.Split(parameterString, ",")
+		runtimeConfig.RuntimeConfig = &registryv1alpha1.RuntimeConfig_NpmConfig{NpmConfig: npmConfig}
+	}
+	return runtimeConfig
+}
+
+// ProtoRuntimeConfigToPluginRuntime converts a registryv1alpha1.RuntimeConfig to a bufpluginconfig.RuntimeConfig .
+func ProtoRuntimeConfigToPluginRuntime(config *registryv1alpha1.RuntimeConfig) *bufpluginconfig.RuntimeConfig {
+	if config == nil {
+		return nil
+	}
+	runtimeConfig := &bufpluginconfig.RuntimeConfig{}
+	if config.GetGoConfig() != nil {
+		goConfig := &bufpluginconfig.GoRuntimeConfig{}
+		goConfig.MinVersion = config.GetGoConfig().GetMinimumVersion()
+		goConfig.Deps = make([]*bufpluginconfig.GoRuntimeDependencyConfig, 0, len(config.GetGoConfig().GetRuntimeLibraries()))
+		for _, library := range config.GetGoConfig().GetRuntimeLibraries() {
+			goConfig.Deps = append(goConfig.Deps, protoGoRuntimeLibraryToGoRuntimeDependency(library))
 		}
-		templateConfig.Plugins = append(templateConfig.Plugins, templatePlugin)
-	}
-	return templateConfig, nil
-}
-
-// TemplateVersionConfig is the config used to describe the plugin
-// version of a new template version.
-type TemplateVersionConfig struct {
-	PluginVersions []PluginVersion
-}
-
-// TemplateVersionConfigToProtoPluginVersionMappings converts the template version config to a
-// slice of Plugin version mappings, suitable for use with the Plugin Service CreateTemplateVersion RPC.
-func TemplateVersionConfigToProtoPluginVersionMappings(
-	templateVersionConfig *TemplateVersionConfig,
-) []*registryv1alpha1.PluginVersionMapping {
-	pluginVersions := make([]*registryv1alpha1.PluginVersionMapping, 0, len(templateVersionConfig.PluginVersions))
-	for _, pluginVersion := range templateVersionConfig.PluginVersions {
-		pluginVersions = append(
-			pluginVersions,
-			&registryv1alpha1.PluginVersionMapping{
-				PluginOwner: pluginVersion.Owner,
-				PluginName:  pluginVersion.Name,
-				Version:     pluginVersion.Version,
-			},
-		)
-	}
-	return pluginVersions
-}
-
-// PluginVersion describes a version of a plugin for
-// use in a template version.
-type PluginVersion struct {
-	Owner   string
-	Name    string
-	Version string
-}
-
-// ParseTemplateVersionConfig parses the input template version config as a path or JSON/YAML literal.
-func ParseTemplateVersionConfig(config string) (*TemplateVersionConfig, error) {
-	var data []byte
-	var err error
-	switch filepath.Ext(config) {
-	case ".json", ".yaml", ".yml":
-		data, err = os.ReadFile(config)
-		if err != nil {
-			return nil, fmt.Errorf("could not read file: %v", err)
+		runtimeConfig.Go = goConfig
+	} else if config.GetNpmConfig() != nil {
+		npmConfig := &bufpluginconfig.NPMRuntimeConfig{}
+		npmConfig.Deps = make([]*bufpluginconfig.NPMRuntimeDependencyConfig, 0, len(config.GetNpmConfig().GetRuntimeLibraries()))
+		for _, library := range config.GetNpmConfig().GetRuntimeLibraries() {
+			npmConfig.Deps = append(npmConfig.Deps, protoNPMRuntimeLibraryToNPMRuntimeDependency(library))
 		}
-	default:
-		data = []byte(config)
+		runtimeConfig.NPM = npmConfig
 	}
-	var version externalTemplateConfigVersion
-	if err := encoding.UnmarshalJSONOrYAMLNonStrict(data, &version); err != nil {
-		return nil, fmt.Errorf("failed to determine version of template version config: %w", err)
-	}
-	switch version.Version {
-	case "":
-		return nil, errors.New("template version config version is required")
-	case v1Version:
-	default:
-		return nil, fmt.Errorf("unknown template version config version: %q", version.Version)
-	}
-	var externalConfig externalTemplateVersionConfig
-	if err := encoding.UnmarshalJSONOrYAMLStrict(data, &externalConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal template version config: %w", err)
-	}
-	templateVersionConfig := &TemplateVersionConfig{
-		PluginVersions: make([]PluginVersion, 0, len(externalConfig.PluginVersions)),
-	}
-	for _, pluginVersion := range externalConfig.PluginVersions {
-		templateVersionConfig.PluginVersions = append(templateVersionConfig.PluginVersions, PluginVersion(pluginVersion))
-	}
-	return templateVersionConfig, nil
+	return runtimeConfig
 }
 
-type externalTemplateConfig struct {
-	Version string                 `json:"version,omitempty" yaml:"version,omitempty"`
-	Plugins []externalPluginConfig `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+// goRuntimeDependencyToProtoGoRuntimeLibrary converts a bufpluginconfig.GoRuntimeDependencyConfig to a registryv1alpha1.GoConfig_RuntimeLibrary.
+func goRuntimeDependencyToProtoGoRuntimeLibrary(config *bufpluginconfig.GoRuntimeDependencyConfig) *registryv1alpha1.GoConfig_RuntimeLibrary {
+	return &registryv1alpha1.GoConfig_RuntimeLibrary{
+		Module:  config.Module,
+		Version: config.Version,
+	}
 }
 
-type externalPluginConfig struct {
-	Owner   string      `json:"owner,omitempty" yaml:"owner,omitempty"`
-	Name    string      `json:"name,omitempty" yaml:"name,omitempty"`
-	Options interface{} `json:"opt,omitempty" yaml:"opt,omitempty"`
+// protoGoRuntimeLibraryToGoRuntimeDependency converts a registryv1alpha1.GoConfig_RuntimeLibrary to a bufpluginconfig.GoRuntimeDependencyConfig.
+func protoGoRuntimeLibraryToGoRuntimeDependency(config *registryv1alpha1.GoConfig_RuntimeLibrary) *bufpluginconfig.GoRuntimeDependencyConfig {
+	return &bufpluginconfig.GoRuntimeDependencyConfig{
+		Module:  config.Module,
+		Version: config.Version,
+	}
 }
 
-type externalTemplateVersionConfig struct {
-	Version        string                  `json:"version,omitempty" yaml:"version,omitempty"`
-	PluginVersions []externalPluginVersion `json:"plugin_versions,omitempty" yaml:"plugin_versions,omitempty"`
+// npmRuntimeDependencyToProtoNPMRuntimeLibrary converts a bufpluginconfig.NPMRuntimeConfig to a registryv1alpha1.NPMConfig_RuntimeLibrary.
+func npmRuntimeDependencyToProtoNPMRuntimeLibrary(config *bufpluginconfig.NPMRuntimeDependencyConfig) *registryv1alpha1.NPMConfig_RuntimeLibrary {
+	return &registryv1alpha1.NPMConfig_RuntimeLibrary{
+		Package: config.Package,
+		Version: config.Version,
+	}
 }
 
-type externalPluginVersion struct {
-	Owner   string `json:"owner,omitempty" yaml:"owner,omitempty"`
-	Name    string `json:"name,omitempty" yaml:"name,omitempty"`
-	Version string `json:"version,omitempty" yaml:"version,omitempty"`
+// protoNPMRuntimeLibraryToNPMRuntimeDependency converts a registryv1alpha1.NPMConfig_RuntimeLibrary to a bufpluginconfig.NPMRuntimeDependencyConfig.
+func protoNPMRuntimeLibraryToNPMRuntimeDependency(config *registryv1alpha1.NPMConfig_RuntimeLibrary) *bufpluginconfig.NPMRuntimeDependencyConfig {
+	return &bufpluginconfig.NPMRuntimeDependencyConfig{
+		Package: config.Package,
+		Version: config.Version,
+	}
 }
 
-type externalTemplateConfigVersion struct {
-	Version string `json:"version,omitempty" yaml:"version,omitempty"`
+// PluginReferencesToCuratedProtoPluginReferences converts a slice of bufpluginref.PluginReference to a slice of registryv1alpha1.CuratedPluginReference.
+func PluginReferencesToCuratedProtoPluginReferences(references []bufpluginref.PluginReference) []*registryv1alpha1.CuratedPluginReference {
+	if references == nil {
+		return nil
+	}
+	protoReferences := make([]*registryv1alpha1.CuratedPluginReference, 0, len(references))
+	for _, reference := range references {
+		protoReferences = append(protoReferences, PluginReferenceToProtoCuratedPluginReference(reference))
+	}
+	return protoReferences
+}
+
+// PluginReferenceToProtoCuratedPluginReference converts a bufpluginref.PluginReference to a registryv1alpha1.CuratedPluginReference.
+func PluginReferenceToProtoCuratedPluginReference(reference bufpluginref.PluginReference) *registryv1alpha1.CuratedPluginReference {
+	if reference == nil {
+		return nil
+	}
+	return &registryv1alpha1.CuratedPluginReference{
+		Owner:    reference.Owner(),
+		Name:     reference.Plugin(),
+		Version:  reference.Version(),
+		Revision: uint32(reference.Revision()),
+	}
+}
+
+// PluginOptionsToOptionsSlice converts a map representation of plugin options to a slice of the form '<key>=<value>' or '<key>' for empty values.
+func PluginOptionsToOptionsSlice(pluginOptions map[string]string) []string {
+	if pluginOptions == nil {
+		return nil
+	}
+	options := make([]string, 0, len(pluginOptions))
+	for key, value := range pluginOptions {
+		if len(value) > 0 {
+			options = append(options, key+"="+value)
+		} else {
+			options = append(options, key)
+		}
+	}
+	return options
+}
+
+// OptionsSliceToPluginOptions converts a slice of plugin options to a map (using the first '=' as a delimiter between key and value).
+// If no '=' is found, the option will be stored in the map with an empty string value.
+func OptionsSliceToPluginOptions(options []string) map[string]string {
+	if options == nil {
+		return nil
+	}
+	pluginOptions := make(map[string]string, len(options))
+	for _, option := range options {
+		fields := strings.SplitN(option, "=", 2)
+		if len(fields) == 2 {
+			pluginOptions[fields[0]] = fields[1]
+		} else {
+			pluginOptions[option] = ""
+		}
+	}
+	return pluginOptions
 }
